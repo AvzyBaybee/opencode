@@ -1,9 +1,9 @@
 import { createMemo, createResource, createSignal, Show, type JSX } from "solid-js"
+import { createResizeObserver } from "@solid-primitives/resize-observer"
 import type { SnapshotFileDiff, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import {
   SESSION_REVIEW_V2_SIDEBAR_WIDTH_MAX,
-  SESSION_REVIEW_V2_SIDEBAR_WIDTH_MIN,
   SessionReviewV2,
   SessionReviewV2Sidebar,
 } from "@opencode-ai/session-ui/v2/session-review-v2"
@@ -29,6 +29,11 @@ import {
   type RenderDiff,
 } from "@/pages/session/v2/review-diff-kinds"
 import type { ReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
+import {
+  effectiveReviewSidebarWidth,
+  maxReviewSidebarWidthForPanel,
+  REVIEW_PANE_SIDEBAR_MIN,
+} from "@/pages/session/session-panel-width"
 import { applyFileListKeyDown, SessionFileListV2 } from "@/pages/session/v2/session-file-list-v2"
 
 type ReviewDiff = FileDiffInfo | SnapshotFileDiff | VcsFileDiff
@@ -56,6 +61,24 @@ export type ReviewPanelV2Props = {
 
 export function ReviewPanelV2(props: ReviewPanelV2Props) {
   const sdk = useSDK()
+  let root: HTMLDivElement | undefined
+  const [panelWidth, setPanelWidth] = createSignal<number>()
+  createResizeObserver(
+    () => root,
+    ({ width }) => setPanelWidth(width),
+  )
+  const sidebarWidth = createMemo(() =>
+    effectiveReviewSidebarWidth({
+      panelWidth: panelWidth(),
+      sidebarOpen: props.state.sidebarOpened(),
+      sidebarWidth: props.state.sidebarWidth(),
+    }),
+  )
+  const sidebarMaxWidth = createMemo(() => {
+    const panel = maxReviewSidebarWidthForPanel(panelWidth())
+    if (panel === undefined) return SESSION_REVIEW_V2_SIDEBAR_WIDTH_MAX
+    return Math.min(SESSION_REVIEW_V2_SIDEBAR_WIDTH_MAX, panel)
+  })
 
   const diffs = createMemo(() => props.diffs().filter(filterRenderableDiff))
   const filteredFiles = createMemo(() =>
@@ -110,61 +133,65 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
       })
 
   return (
-    <SessionReviewV2
-      title={props.title}
-      stats={<DiffChanges changes={diffs()} />}
-      empty={props.empty}
-      sidebarOpen={props.state.sidebarOpened()}
-      sidebar={
-        // Always mounted: the sidebar header hosts the changes-mode dropdown,
-        // which must stay reachable when the current mode has zero diffs.
-        <ReviewPanelV2Sidebar
-          title={props.title}
-          state={props.state}
-          diffsReady={props.diffsReady}
-          onSelectFile={props.onSelectFile}
-          diffs={diffs}
-          filteredFiles={filteredFiles}
-          searching={searching}
-          kinds={treeKinds}
-          activeDiff={activeDiff}
-        />
-      }
-      activeFile={activeDiff()}
-      files={filteredFiles()}
-      onSelectFile={props.onSelectFile}
-      diffStyle={props.diffStyle}
-      onDiffStyleChange={props.onDiffStyleChange}
-      expandMode={props.state.expandMode()}
-      onExpandModeChange={props.state.setExpandMode}
-      hasDiffs={diffs().length > 0}
-      preview={
-        // Key on the file path, not the diff object identity, so refreshed diff data
-        // updates the mounted preview instead of remounting the whole viewer.
-        <Show when={activeDiff()} keyed>
-          {(file) => (
-            <Show when={activeItem()}>
-              {(diff) => (
-                <SessionReviewFilePreviewV2
-                  file={file}
-                  diff={diff()}
-                  diffStyle={props.diffStyle}
-                  expandMode={props.state.expandMode()}
-                  readFile={readFile}
-                  onLineComment={props.onLineComment}
-                  onLineCommentUpdate={props.onLineCommentUpdate}
-                  onLineCommentDelete={props.onLineCommentDelete}
-                  lineCommentActions={props.lineCommentActions}
-                  comments={props.comments}
-                  focusedComment={props.focusedComment}
-                  onFocusedCommentChange={props.onFocusedCommentChange}
-                />
-              )}
-            </Show>
-          )}
-        </Show>
-      }
-    />
+    <div ref={root} class="size-full min-h-0">
+      <SessionReviewV2
+        title={props.title}
+        stats={<DiffChanges changes={diffs()} />}
+        empty={props.empty}
+        sidebarOpen={props.state.sidebarOpened()}
+        sidebar={
+          // Always mounted: the sidebar header hosts the changes-mode dropdown,
+          // which must stay reachable when the current mode has zero diffs.
+          <ReviewPanelV2Sidebar
+            title={props.title}
+            state={props.state}
+            diffsReady={props.diffsReady}
+            onSelectFile={props.onSelectFile}
+            diffs={diffs}
+            filteredFiles={filteredFiles}
+            searching={searching}
+            kinds={treeKinds}
+            activeDiff={activeDiff}
+            sidebarWidth={sidebarWidth()}
+            sidebarMaxWidth={sidebarMaxWidth()}
+          />
+        }
+        activeFile={activeDiff()}
+        files={filteredFiles()}
+        onSelectFile={props.onSelectFile}
+        diffStyle={props.diffStyle}
+        onDiffStyleChange={props.onDiffStyleChange}
+        expandMode={props.state.expandMode()}
+        onExpandModeChange={props.state.setExpandMode}
+        hasDiffs={diffs().length > 0}
+        preview={
+          // Key on the file path, not the diff object identity, so refreshed diff data
+          // updates the mounted preview instead of remounting the whole viewer.
+          <Show when={activeDiff()} keyed>
+            {(file) => (
+              <Show when={activeItem()}>
+                {(diff) => (
+                  <SessionReviewFilePreviewV2
+                    file={file}
+                    diff={diff()}
+                    diffStyle={props.diffStyle}
+                    expandMode={props.state.expandMode()}
+                    readFile={readFile}
+                    onLineComment={props.onLineComment}
+                    onLineCommentUpdate={props.onLineCommentUpdate}
+                    onLineCommentDelete={props.onLineCommentDelete}
+                    lineCommentActions={props.lineCommentActions}
+                    comments={props.comments}
+                    focusedComment={props.focusedComment}
+                    onFocusedCommentChange={props.onFocusedCommentChange}
+                  />
+                )}
+              </Show>
+            )}
+          </Show>
+        }
+      />
+    </div>
   )
 }
 
@@ -178,6 +205,8 @@ function ReviewPanelV2Sidebar(props: {
   searching: () => boolean
   kinds: () => ReturnType<typeof reviewDiffKinds>
   activeDiff: () => string | undefined
+  sidebarWidth: number
+  sidebarMaxWidth: number
 }) {
   const language = useLanguage()
   const [explicitHighlight, setExplicitHighlight] = createSignal<string | undefined>()
@@ -207,10 +236,10 @@ function ReviewPanelV2Sidebar(props: {
       filter={props.state.filter()}
       onFilterChange={props.state.setFilter}
       onFilterKeyDown={onFilterKeyDown}
-      width={props.state.sidebarWidth()}
+      width={props.sidebarWidth}
       onWidthChange={props.state.resizeSidebar}
-      minWidth={SESSION_REVIEW_V2_SIDEBAR_WIDTH_MIN}
-      maxWidth={SESSION_REVIEW_V2_SIDEBAR_WIDTH_MAX}
+      minWidth={REVIEW_PANE_SIDEBAR_MIN}
+      maxWidth={props.sidebarMaxWidth}
     >
       <Show
         when={props.diffsReady()}

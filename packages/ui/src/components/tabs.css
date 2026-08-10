@@ -779,6 +779,7 @@ body[data-new-layout] #review-panel [data-component="tabs"] .session-review-v2-t
   min-width: 0;
   gap: 8px;
   box-sizing: border-box;
+  overflow-x: auto;
   border-bottom: 1px solid var(--border-weaker-base, var(--v2-border-border-weak));
   background-color: var(--v2-background-bg-base);
 }

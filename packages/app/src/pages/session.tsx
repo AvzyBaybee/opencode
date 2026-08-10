@@ -80,6 +80,7 @@ import {
   clampSessionPanelWidth,
   SESSION_PANEL_WIDTH_MIN,
   sessionPanelWidthMax,
+  sidePanelWidthMin,
 } from "@/pages/session/session-panel-width"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
@@ -375,6 +376,7 @@ export default function Page() {
   const reviewFile = () => view().review.file()
   const sessionOwnership = createSessionOwnership(sessionKey)
   const newSessionDesign = createMemo(() => settings.general.newLayoutDesigns())
+  const reviewV2State = createReviewPanelV2State()
 
   createEffect(() => {
     if (!prompt.ready()) return
@@ -472,9 +474,6 @@ export default function Page() {
     () => panelRow,
     ({ width }) => setPanelRowWidth(width),
   )
-  const splitReview = createMemo(
-    () => (newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()) && layout.review.diffStyle() === "split",
-  )
   // The observer reports the content-box width, which already excludes the row
   // padding; only the flex gap between the panels remains to subtract.
   const sessionPanelAvailable = createMemo(() => {
@@ -482,10 +481,23 @@ export default function Page() {
     if (width === undefined) return undefined
     return width - (settings.general.newLayoutDesigns() ? 8 : 0)
   })
+  const sidePanelMin = createMemo(() => {
+    if (!desktopSessionResizeOpen()) return 0
+    const reviewOpen = newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()
+    return sidePanelWidthMin({
+      reviewOpen,
+      terminalOnly: desktopInlineTerminalOnlyOpen(),
+      review: {
+        v2: newSessionDesign(),
+        split: layout.review.diffStyle() === "split",
+        sidebarOpen: reviewV2State.sidebarOpened(),
+      },
+    })
+  })
   const sessionPanelMax = createMemo(() => {
     const available = sessionPanelAvailable()
     if (available === undefined) return 1000
-    return sessionPanelWidthMax({ available, split: splitReview() })
+    return sessionPanelWidthMax({ available, sidePanelMin: sidePanelMin() })
   })
   // Clamp at render time so window or sidebar resizes squeeze the chat panel
   // instead of the review pane, without overwriting the persisted width.
@@ -493,7 +505,7 @@ export default function Page() {
     clampSessionPanelWidth({
       width: layout.session.width(),
       available: sessionPanelAvailable(),
-      split: splitReview(),
+      sidePanelMin: sidePanelMin(),
     }),
   )
   const sessionPanelWidth = createMemo(() => {
@@ -1292,11 +1304,8 @@ export default function Page() {
     </Show>
   )
 
-  const reviewV2State = createReviewPanelV2State()
 
-  // Getters defer reactive reads to the consuming scope. Eager reads here ran inside
-  // the side panel's Show children and remounted the whole review panel on unrelated
-  // updates such as session switches.
+  // Getters defer reactive reads to the consuming scope.
   const reviewPanelV2Props = () => ({
     get title() {
       return changesTitleV2()
@@ -2316,6 +2325,7 @@ export default function Page() {
               focusReviewDiff={focusReviewDiff}
               reviewSnap={ui.reviewSnap}
               size={size}
+              minWidth={() => (desktopReviewOpen() ? sidePanelMin() : undefined)}
             />
           </Suspense>
         </Show>
@@ -2347,6 +2357,7 @@ export default function Page() {
                       reviewSnap={ui.reviewSnap}
                       size={size}
                       stacked={desktopV2PanelLayout().stacked}
+                      minWidth={() => (desktopV2ReviewOpen() ? sidePanelMin() : undefined)}
                     />
                   </Suspense>
                 </div>

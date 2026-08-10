@@ -81,6 +81,7 @@ export function SessionSidePanel(props: {
   reviewSnap: boolean
   size: Sizing
   stacked?: boolean
+  minWidth?: () => number | undefined
 }) {
   const layout = useLayout()
   const settings = useSettings()
@@ -306,7 +307,10 @@ export function SessionSidePanel(props: {
           "rounded-[10px] shadow-[var(--v2-elevation-raised)] overflow-hidden": settings.general.newLayoutDesigns(),
           "flex-1": reviewOpen(),
         }}
-        style={{ width: panelWidth() }}
+        style={{
+          width: panelWidth(),
+          ...(reviewOpen() && props.minWidth?.() ? { "min-width": `${props.minWidth()}px` } : {}),
+        }}
       >
         <Show when={open()}>
           <div

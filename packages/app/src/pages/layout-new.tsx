@@ -33,7 +33,7 @@ export default function NewLayout(props: ParentProps) {
       <Titlebar
         update={update}
         debugTools={
-          import.meta.env.DEV
+          import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEBUG_BAR !== "1"
             ? { visible: state.debugTools, toggle: () => setState("debugTools", (value) => !value) }
             : undefined
         }
@@ -41,7 +41,9 @@ export default function NewLayout(props: ParentProps) {
       <main class="flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict">
         <Suspense>{props.children}</Suspense>
       </main>
-      {import.meta.env.DEV && state.debugTools && <DebugBar inline />}
+      {import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEBUG_BAR !== "1" && state.debugTools && (
+        <DebugBar inline />
+      )}
       <TabsInfoPopup />
       <ToastRegion v2 />
     </div>

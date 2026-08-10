@@ -1,24 +1,17 @@
 @echo off
 setlocal EnableExtensions
 
-rem Launch your custom OpenCode fork alongside the official app.
-rem Uses the beta app identity (separate from official) with production UI (no channel badge).
-rem Rebuilds automatically when source changes are detected.
-rem Usage:
-rem   open-opencode-desktop.cmd            Launch (auto-rebuild if stale)
-rem   open-opencode-desktop.cmd --rebuild  Force a fresh production build
+rem Fast dev mode for custom OpenCode (hot reload while you edit).
+rem Production UI: no channel badge, no debug bar. Runs alongside official OpenCode.
+rem Keep this window open. Close it to stop the app.
 
 set "REPO_ROOT=%~dp0"
 cd /d "%REPO_ROOT%"
 
 set "OPENCODE_CHANNEL=beta"
 set "OPENCODE_UI_CHANNEL=prod"
-set "APP_EXE=packages\desktop\dist\win-unpacked\OpenCode Beta.exe"
-set "HELPER=%REPO_ROOT%script\custom-fork\open-opencode-desktop.ps1"
-set "FORCE_REBUILD=0"
-
-if /I "%~1"=="--rebuild" set "FORCE_REBUILD=1"
-if /I "%~1"=="/rebuild" set "FORCE_REBUILD=1"
+set "VITE_DISABLE_DEBUG_BAR=1"
+set "CHOKIDAR_USEPOLLING=1"
 
 where bun >nul 2>&1
 if errorlevel 1 (
@@ -44,63 +37,18 @@ if not exist "node_modules\" (
   )
 )
 
-if "%FORCE_REBUILD%"=="1" goto build
-
-powershell -NoProfile -ExecutionPolicy Bypass -File "%HELPER%" -RepoRoot "%CD%"
-if errorlevel 2 goto build
-if errorlevel 1 (
-  echo.
-  echo Failed to launch custom OpenCode.
-  echo Logs: %APPDATA%\ai.opencode.desktop.beta\logs
-  echo.
-  pause
-  exit /b 1
-)
-goto done
-
-:build
 echo.
-echo Building your custom OpenCode desktop.
-echo This can take a few minutes.
+echo Starting custom OpenCode in dev mode...
+echo   UI changes reload in seconds. Server changes restart the app briefly.
+echo   Set OPENCODE_DEV_REBUILD=1 to force a fresh server build on launch.
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $p = Get-Process -Name 'OpenCode Beta' -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*\packages\desktop\dist\win-unpacked\*' }; if ($p) { Write-Host 'Closing running custom OpenCode so the build can update files...'; $p | Stop-Process -Force; Start-Sleep -Seconds 2 } }"
-set "OPENCODE_CHANNEL=beta"
-set "OPENCODE_UI_CHANNEL=prod"
-call bun run --cwd packages/desktop build
+bun ./script/custom-fork/dev-desktop.ts
 if errorlevel 1 (
   echo.
-  echo Build failed.
-  echo.
-  pause
-  exit /b 1
-)
-call bun run --cwd packages/desktop package:win -- --dir
-if errorlevel 1 (
-  echo.
-  echo Packaging failed. Close any custom OpenCode Beta windows and try again.
+  echo Dev session ended with an error.
   echo.
   pause
   exit /b 1
 )
 
-if not exist "%APP_EXE%" (
-  echo.
-  echo Could not find the desktop app:
-  echo   %APP_EXE%
-  echo.
-  pause
-  exit /b 1
-)
-
-powershell -NoProfile -ExecutionPolicy Bypass -File "%HELPER%" -RepoRoot "%CD%" -Restart
-if errorlevel 1 (
-  echo.
-  echo Failed to launch custom OpenCode.
-  echo Logs: %APPDATA%\ai.opencode.desktop.beta\logs
-  echo.
-  pause
-  exit /b 1
-)
-
-:done
 exit /b 0
