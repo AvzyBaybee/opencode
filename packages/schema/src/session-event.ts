@@ -451,6 +451,11 @@ export namespace MessageEvent {
     ...options,
     schema: { ...Base, messageID: SessionMessage.ID },
   })
+  export const Edited = Event.define({
+    type: "session.next.message.edited",
+    ...options,
+    schema: { ...Base, messageID: SessionMessage.ID, text: Schema.String },
+  })
 }
 
 export const DurableDefinitions = Event.inventory(
@@ -483,6 +488,7 @@ export const DurableDefinitions = Event.inventory(
   RevertEvent.Cleared,
   RevertEvent.Committed,
   MessageEvent.Deleted,
+  MessageEvent.Edited,
 )
 
 export const Definitions = Event.inventory(
@@ -519,6 +525,7 @@ export const Definitions = Event.inventory(
   RevertEvent.Cleared,
   RevertEvent.Committed,
   MessageEvent.Deleted,
+  MessageEvent.Edited,
 )
 
 export const Durable = Schema.Union(DurableDefinitions, { mode: "oneOf" })

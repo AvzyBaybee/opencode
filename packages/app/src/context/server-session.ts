@@ -944,6 +944,34 @@ export function createServerSession(
       })
       return
     }
+    if ((event.type as string) === "session.next.message.edited") {
+      const messageID = (event.data as { messageID: string }).messageID
+      const text = (event.data as { text: string }).text
+      const current = data.session_message[sessionID]?.find((message) => message.id === messageID)
+      if (!current) {
+        hydrateV2Message(sessionID, messageID)
+        return
+      }
+      const message =
+        current.type === "user"
+          ? { ...current, text }
+          : current.type === "assistant"
+            ? {
+                ...current,
+                content: current.content.map((content, index) =>
+                  index === current.content.findLastIndex((item) => item.type === "text") && content.type === "text"
+                    ? { ...content, text }
+                    : content,
+                ),
+              }
+            : current
+      projectV2({
+        sessionID,
+        messages: data.session_message[sessionID]?.map((item) => (item.id === messageID ? message : item)) ?? [message],
+        touched: [messageID],
+      })
+      return
+    }
     const reduction = v2.reduce(data.session_message[sessionID] ?? [], event)
     if (reduction) {
       projectV2(reduction)

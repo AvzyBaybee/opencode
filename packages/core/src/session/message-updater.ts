@@ -391,6 +391,7 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
       "session.next.revert.cleared": () => Effect.void,
       "session.next.revert.committed": () => Effect.void,
       "session.next.message.deleted": () => Effect.void,
+      "session.next.message.edited": () => Effect.void,
     })
   })
 }

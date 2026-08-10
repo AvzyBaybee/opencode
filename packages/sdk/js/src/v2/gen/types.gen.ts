@@ -49,6 +49,7 @@ export type Event =
   | EventSessionNextRevertCleared
   | EventSessionNextRevertCommitted
   | EventSessionNextMessageDeleted
+  | EventSessionNextMessageEdited
   | EventMessagePartDelta
   | EventSessionDiff
   | EventSessionError
@@ -1202,6 +1203,16 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "session.next.message.edited"
+        properties: {
+          timestamp: number
+          sessionID: string
+          messageID: string
+          text: string
+        }
+      }
+    | {
+        id: string
         type: "message.part.delta"
         properties: {
           sessionID: string
@@ -1647,6 +1658,7 @@ export type GlobalEvent = {
     | SyncEventSessionNextRevertCleared
     | SyncEventSessionNextRevertCommitted
     | SyncEventSessionNextMessageDeleted
+    | SyncEventSessionNextMessageEdited
 }
 
 /**
@@ -2778,6 +2790,7 @@ export type SessionDurableEvent =
   | SessionNextRevertCleared
   | SessionNextRevertCommitted
   | SessionNextMessageDeleted
+  | SessionNextMessageEdited
 
 export type SessionHistory = {
   data: Array<SessionDurableEvent>
@@ -2792,6 +2805,13 @@ export type SessionMessagesResponse = {
     previous?: string
     next?: string
   }
+}
+
+export type MessageNotEditableError = {
+  _tag: "MessageNotEditableError"
+  sessionID: string
+  messageID: string
+  message: string
 }
 
 export type ProviderNotFoundError = {
@@ -2910,6 +2930,7 @@ export type V2Event =
   | SessionNextRevertCleared
   | SessionNextRevertCommitted
   | SessionNextMessageDeleted
+  | SessionNextMessageEdited
   | MessagePartDelta
   | SessionDiff
   | SessionError
@@ -3849,6 +3870,23 @@ export type SyncEventSessionNextMessageDeleted = {
       timestamp: number
       sessionID: string
       messageID: string
+    }
+  }
+}
+
+export type SyncEventSessionNextMessageEdited = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "session.next.message.edited.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      timestamp: number
+      sessionID: string
+      messageID: string
+      text: string
     }
   }
 }
@@ -4821,6 +4859,26 @@ export type SessionNextMessageDeleted = {
     timestamp: number
     sessionID: string
     messageID: string
+  }
+}
+
+export type SessionNextMessageEdited = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "session.next.message.edited"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    timestamp: number
+    sessionID: string
+    messageID: string
+    text: string
   }
 }
 
@@ -6712,6 +6770,17 @@ export type EventSessionNextMessageDeleted = {
     timestamp: number
     sessionID: string
     messageID: string
+  }
+}
+
+export type EventSessionNextMessageEdited = {
+  id: string
+  type: "session.next.message.edited"
+  properties: {
+    timestamp: number
+    sessionID: string
+    messageID: string
+    text: string
   }
 }
 
@@ -12087,6 +12156,48 @@ export type V2SessionMessageResponses = {
 }
 
 export type V2SessionMessageResponse = V2SessionMessageResponses[keyof V2SessionMessageResponses]
+
+export type V2SessionMessageEditData = {
+  body: {
+    text: string
+  }
+  path: {
+    sessionID: string
+    messageID: string
+  }
+  query?: never
+  url: "/api/session/{sessionID}/message/{messageID}"
+}
+
+export type V2SessionMessageEditErrors = {
+  /**
+   * MessageNotEditableError | InvalidRequestError
+   */
+  400: MessageNotEditableError | InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * MessageNotFoundError | SessionNotFoundError
+   */
+  404: MessageNotFoundError | SessionNotFoundError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type V2SessionMessageEditError = V2SessionMessageEditErrors[keyof V2SessionMessageEditErrors]
+
+export type V2SessionMessageEditResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2SessionMessageEditResponse = V2SessionMessageEditResponses[keyof V2SessionMessageEditResponses]
 
 export type V2SessionMessagesData = {
   body?: never

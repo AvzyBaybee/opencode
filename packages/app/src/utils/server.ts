@@ -49,6 +49,15 @@ export function createSdkForServer({
         }
       ).message2.delete(input)
     },
+    editMessage(input: { sessionID: string; messageID: string; text: string }) {
+      return (
+        client as unknown as {
+          message2: {
+            edit(input: { sessionID: string; messageID: string; text: string }): Promise<unknown>
+          }
+        }
+      ).message2.edit(input)
+    },
   })
 }
 

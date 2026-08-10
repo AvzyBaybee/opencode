@@ -243,6 +243,27 @@ describe("server session", () => {
     expect(ctx.store.data.part.msg_deleted).toBeUndefined()
   })
 
+  test("applies V2 message edits to current and legacy state", () => {
+    const ctx = setup({ child: session("child") })
+    ctx.store.remember(session("child"))
+    ctx.store.set("session_message", "child", [
+      { id: "msg_edited", type: "user", text: "before", time: { created: 1 } },
+    ])
+    ctx.store.set("message", "child", [userMessage("msg_edited")])
+    ctx.store.set("part", "msg_edited", [textPart("msg_edited", { text: "before" })])
+    ctx.store.applyV2({
+      id: "evt_edited",
+      created: 2,
+      type: "session.next.message.edited",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: { sessionID: "child", messageID: "msg_edited", text: "after" },
+    } as unknown as OpenCodeEvent)
+
+    expect(ctx.store.data.session_message.child).toMatchObject([{ id: "msg_edited", text: "after" }])
+    expect(ctx.store.data.message.child).toMatchObject([{ id: "msg_edited", role: "user" }])
+    expect(ctx.store.data.part.msg_edited).toMatchObject([{ type: "text", text: "after" }])
+  })
+
   test("resolves lineage by session ID without directory", async () => {
     const ctx = setup({ child: session("child", "root"), root: session("root") })
 

@@ -11,6 +11,7 @@ import { WorkspaceTable } from "../control-plane/workspace.sql"
 import { SessionMessage } from "./message"
 import { SessionMessageUpdater } from "./message-updater"
 import { SessionInput } from "./input"
+import { Prompt } from "./prompt"
 import { WorkspaceV2 } from "../workspace"
 import { SessionContextEpoch } from "./context-epoch"
 import { MessageTable, PartTable, SessionInputTable, SessionMessageTable, SessionTable } from "./sql"
@@ -327,6 +328,70 @@ const layer = Layer.effectDiscard(
           .pipe(Effect.orDie)
         yield* db
           .delete(SessionInputTable)
+          .where(
+            and(eq(SessionInputTable.id, event.data.messageID), eq(SessionInputTable.session_id, event.data.sessionID)),
+          )
+          .run()
+          .pipe(Effect.orDie)
+      }),
+    )
+    yield* events.project(SessionEvent.MessageEvent.Edited, (event) =>
+      Effect.gen(function* () {
+        const row = yield* db
+          .select()
+          .from(SessionMessageTable)
+          .where(
+            and(
+              eq(SessionMessageTable.id, event.data.messageID),
+              eq(SessionMessageTable.session_id, event.data.sessionID),
+            ),
+          )
+          .get()
+          .pipe(Effect.orDie)
+        if (!row) return
+
+        const message = decodeMessage({ ...row.data, id: row.id, type: row.type })
+        const next =
+          message.type === "user"
+            ? { ...message, text: event.data.text }
+            : message.type === "assistant"
+              ? {
+                  ...message,
+                  content: message.content.map((content, index) =>
+                    index === message.content.findLastIndex((item) => item.type === "text") && content.type === "text"
+                      ? { ...content, text: event.data.text }
+                      : content,
+                  ),
+                }
+              : message
+        const encoded = encodeMessage(next)
+        const { id, type, ...data } = encoded
+        yield* db
+          .update(SessionMessageTable)
+          .set({ type, data })
+          .where(
+            and(
+              eq(SessionMessageTable.id, event.data.messageID),
+              eq(SessionMessageTable.session_id, event.data.sessionID),
+            ),
+          )
+          .run()
+          .pipe(Effect.orDie)
+
+        if (message.type !== "user") return
+        const input = yield* db
+          .select()
+          .from(SessionInputTable)
+          .where(
+            and(eq(SessionInputTable.id, event.data.messageID), eq(SessionInputTable.session_id, event.data.sessionID)),
+          )
+          .get()
+          .pipe(Effect.orDie)
+        if (!input) return
+        const prompt = Schema.decodeUnknownSync(Prompt)(input.prompt)
+        yield* db
+          .update(SessionInputTable)
+          .set({ prompt: Schema.encodeSync(Prompt)({ ...prompt, text: event.data.text }) })
           .where(
             and(eq(SessionInputTable.id, event.data.messageID), eq(SessionInputTable.session_id, event.data.sessionID)),
           )

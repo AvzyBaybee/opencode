@@ -35,6 +35,7 @@ import { Tabs } from "@opencode-ai/ui/tabs"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
+import { TextField } from "@opencode-ai/ui/text-field"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
 import { Button } from "@opencode-ai/ui/button"
@@ -1875,6 +1876,35 @@ export default function Page() {
     },
   }))
 
+  const editMutation = useMutation(() => ({
+    mutationFn: async (input: { sessionID: string; messageID: string; text: string }) => {
+      const target = sync()
+      const current = target.data.part[input.messageID]?.find((part) => part.type === "text")
+      if (!current) throw new Error(`Message has no editable text: ${input.messageID}`)
+      const next = { ...current, text: input.text }
+      target.session.apply({
+        type: "message.part.updated",
+        properties: { sessionID: input.sessionID, part: next, time: Date.now() },
+      })
+      try {
+        if ((await sdk().protocol) === "v1") {
+          await sdk().client.part.update({
+            sessionID: input.sessionID,
+            messageID: input.messageID,
+            partID: current.id,
+            part: next,
+          })
+        } else {
+          await sdk().client.editMessage(input)
+        }
+        await target.session.sync(input.sessionID, { force: true })
+      } catch (error) {
+        await target.session.sync(input.sessionID, { force: true })
+        throw error
+      }
+    },
+  }))
+
   const restoreMutation = useMutation(() => ({
     mutationFn: async (id: string) => {
       const sessionID = params.id
@@ -1910,6 +1940,7 @@ export default function Page() {
 
   const reverting = createMemo(() => revertMutation.isPending || restoreMutation.isPending)
   const deleting = createMemo(() => deleteMutation.isPending)
+  const editing = createMemo(() => editMutation.isPending)
   const restoring = createMemo(() => (restoreMutation.isPending ? restoreMutation.variables : undefined))
 
   const revert = (input: { sessionID: string; messageID: string }) => {
@@ -1961,6 +1992,63 @@ export default function Page() {
     )
   }
 
+  const DialogEditMessage = (props: { text: string; onEdit: (text: string) => void }) => {
+    const [text, setText] = createSignal(props.text)
+    const submit = () => props.onEdit(text())
+
+    if (settings.general.newLayoutDesigns())
+      return (
+        <DialogV2 fit>
+          <DialogHeader hideClose>
+            <DialogTitleGroup
+              title={language.t("ui.message.editMessage")}
+              description={language.t("ui.message.editMessageConfirm")}
+            />
+          </DialogHeader>
+          <div class="px-6 py-2">
+            <TextField multiline autofocus value={text()} onChange={setText} />
+          </div>
+          <DialogFooter>
+            <ButtonV2 variant="ghost" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </ButtonV2>
+            <ButtonV2 variant="contrast" disabled={!text().trim()} onClick={submit}>
+              {language.t("ui.message.saveMessage")}
+            </ButtonV2>
+          </DialogFooter>
+        </DialogV2>
+      )
+
+    return (
+      <Dialog title={language.t("ui.message.editMessage")} fit>
+        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
+          <TextField multiline autofocus value={text()} onChange={setText} />
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </Button>
+            <Button variant="primary" size="large" disabled={!text().trim()} onClick={submit}>
+              {language.t("ui.message.saveMessage")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+
+  const editMessage = (input: { sessionID: string; messageID: string; text: string }) => {
+    if (editing()) return
+    dialog.show(() => (
+      <DialogEditMessage
+        text={input.text}
+        onEdit={(text) => {
+          dialog.close()
+          void editMutation.mutateAsync({ ...input, text })
+        }}
+      />
+    ))
+  }
+
   const deleteMessage = (input: { sessionID: string; messageID: string }) => {
     if (deleting()) return
     dialog.show(() => (
@@ -2006,7 +2094,7 @@ export default function Page() {
     download()
   }
 
-  const actions = { revert, delete: deleteMessage, openAttachment }
+  const actions = { revert, delete: deleteMessage, edit: editMessage, openAttachment }
 
   createEffect(() => {
     const sessionID = params.id

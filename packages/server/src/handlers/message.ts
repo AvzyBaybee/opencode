@@ -5,6 +5,7 @@ import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
 import {
   InvalidCursorError,
+  MessageNotEditableError,
   MessageNotFoundError,
   ServiceUnavailableError,
   SessionNotFoundError,
@@ -114,6 +115,50 @@ export const MessageHandler = HttpApiBuilder.group(Api, "server.message", (handl
                 }),
             ),
           )
+          return HttpApiSchema.NoContent.make()
+        }),
+      )
+      .handle(
+        "session.message.edit",
+        Effect.fn(function* (ctx) {
+          yield* session
+            .editMessage({ ...ctx.params, text: ctx.payload.text })
+            .pipe(
+              Effect.catchTag(
+                "Session.NotFoundError",
+                (error) =>
+                  new SessionNotFoundError({
+                    sessionID: error.sessionID,
+                    message: `Session not found: ${error.sessionID}`,
+                  }),
+              ),
+              Effect.catchTag(
+                "Session.MessageNotFoundError",
+                (error) =>
+                  new MessageNotFoundError({
+                    sessionID: error.sessionID,
+                    messageID: error.messageID,
+                    message: `Message not found: ${error.messageID}`,
+                  }),
+              ),
+              Effect.catchTag(
+                "Session.MessageNotEditableError",
+                (error) =>
+                  new MessageNotEditableError({
+                    sessionID: error.sessionID,
+                    messageID: error.messageID,
+                    message: `Message cannot be edited: ${error.messageID}`,
+                  }),
+              ),
+              Effect.catchTag(
+                "Session.OperationUnavailableError",
+                (error) =>
+                  new ServiceUnavailableError({
+                    message: `Session ${error.operation} is not available yet`,
+                    service: `session.${error.operation}`,
+                  }),
+              ),
+            )
           return HttpApiSchema.NoContent.make()
         }),
       )

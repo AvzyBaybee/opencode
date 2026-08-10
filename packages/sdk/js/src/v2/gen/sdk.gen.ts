@@ -353,6 +353,8 @@ import type {
   V2SessionListResponses,
   V2SessionMessageDeleteErrors,
   V2SessionMessageDeleteResponses,
+  V2SessionMessageEditErrors,
+  V2SessionMessageEditResponses,
   V2SessionMessageErrors,
   V2SessionMessageResponses,
   V2SessionMessagesErrors,
@@ -5202,6 +5204,47 @@ export class Message extends HeyApiClient {
       url: "/api/session/{sessionID}/message/{messageID}",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Edit session message
+   *
+   * Permanently update one message's text without changing attachments or later messages.
+   */
+  public edit<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      messageID: string
+      text?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "messageID" },
+            { in: "body", key: "text" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      V2SessionMessageEditResponses,
+      V2SessionMessageEditErrors,
+      ThrowOnError
+    >({
+      url: "/api/session/{sessionID}/message/{messageID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }

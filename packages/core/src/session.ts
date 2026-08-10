@@ -35,6 +35,7 @@ import { SessionInput } from "./session/input"
 import { Snapshot } from "./snapshot"
 import { SessionRevert } from "./session/revert"
 import { SessionDelete } from "./session/delete"
+import { MessageNotEditableError, SessionEdit } from "./session/edit"
 import { Revert } from "@opencode-ai/schema/revert"
 import { FSUtil } from "./fs-util"
 import { SessionDurable } from "@opencode-ai/schema/durable-event-manifest"
@@ -96,7 +97,7 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Ses
 export class OperationUnavailableError extends Schema.TaggedErrorClass<OperationUnavailableError>()(
   "Session.OperationUnavailableError",
   {
-    operation: Schema.Literals(["move", "shell", "skill", "switchAgent", "compact", "wait", "delete"]),
+    operation: Schema.Literals(["move", "shell", "skill", "switchAgent", "compact", "wait", "delete", "edit"]),
   },
 ) {}
 
@@ -108,6 +109,7 @@ export class PromptConflictError extends Schema.TaggedErrorClass<PromptConflictE
 }) {}
 export const MessageNotFoundError = SessionRevert.MessageNotFoundError
 export type MessageNotFoundError = SessionRevert.MessageNotFoundError
+export { MessageNotEditableError }
 
 export type Error = NotFoundError | MessageDecodeError | OperationUnavailableError | PromptConflictError
 
@@ -132,6 +134,11 @@ export interface Interface {
     sessionID: SessionSchema.ID
     messageID: SessionMessage.ID
   }) => Effect.Effect<void, NotFoundError | MessageNotFoundError | OperationUnavailableError>
+  readonly editMessage: (input: {
+    sessionID: SessionSchema.ID
+    messageID: SessionMessage.ID
+    text: string
+  }) => Effect.Effect<void, NotFoundError | MessageNotFoundError | MessageNotEditableError | OperationUnavailableError>
   readonly context: (
     sessionID: SessionSchema.ID,
   ) => Effect.Effect<SessionMessage.Message[], NotFoundError | MessageDecodeError>
@@ -349,6 +356,15 @@ const layer = Layer.effect(
         if ((yield* execution.active).has(input.sessionID))
           return yield* new OperationUnavailableError({ operation: "delete" })
         yield* SessionDelete.remove(input).pipe(
+          Effect.provideService(Database.Service, database),
+          Effect.provideService(EventV2.Service, events),
+        )
+      }),
+      editMessage: Effect.fn("V2Session.editMessage")(function* (input) {
+        yield* result.get(input.sessionID)
+        if ((yield* execution.active).has(input.sessionID))
+          return yield* new OperationUnavailableError({ operation: "edit" })
+        yield* SessionEdit.edit(input).pipe(
           Effect.provideService(Database.Service, database),
           Effect.provideService(EventV2.Service, events),
         )

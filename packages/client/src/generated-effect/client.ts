@@ -250,7 +250,23 @@ const Endpoint4_1 = (raw: RawClient["server.message"]) => (input: Endpoint4_1Inp
     Effect.mapError(mapClientError),
   )
 
-const adaptGroup4 = (raw: RawClient["server.message"]) => ({ list: Endpoint4_0(raw), delete: Endpoint4_1(raw) })
+type Endpoint4_2Request = Parameters<RawClient["server.message"]["session.message.edit"]>[0]
+type Endpoint4_2Input = {
+  readonly sessionID: Endpoint4_2Request["params"]["sessionID"]
+  readonly messageID: Endpoint4_2Request["params"]["messageID"]
+  readonly text: Endpoint4_2Request["payload"]["text"]
+}
+const Endpoint4_2 = (raw: RawClient["server.message"]) => (input: Endpoint4_2Input) =>
+  raw["session.message.edit"]({
+    params: { sessionID: input["sessionID"], messageID: input["messageID"] },
+    payload: { text: input["text"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroup4 = (raw: RawClient["server.message"]) => ({
+  list: Endpoint4_0(raw),
+  delete: Endpoint4_1(raw),
+  edit: Endpoint4_2(raw),
+})
 
 type Endpoint5_0Request = Parameters<RawClient["server.model"]["model.list"]>[0]
 type Endpoint5_0Input = { readonly location?: Endpoint5_0Request["query"]["location"] }

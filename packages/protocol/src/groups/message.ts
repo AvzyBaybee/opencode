@@ -4,6 +4,7 @@ import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import {
   InvalidCursorError,
+  MessageNotEditableError,
   MessageNotFoundError,
   ServiceUnavailableError,
   SessionNotFoundError,
@@ -59,6 +60,20 @@ export const MessageGroup = HttpApiGroup.make("server.message")
         identifier: "v2.session.message.delete",
         summary: "Delete session message",
         description: "Permanently remove one message from session history without reverting file changes.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.patch("session.message.edit", "/api/session/:sessionID/message/:messageID", {
+      params: { sessionID: Session.ID, messageID: SessionMessage.ID },
+      payload: Schema.Struct({ text: Schema.String }),
+      success: HttpApiSchema.NoContent,
+      error: [MessageNotEditableError, MessageNotFoundError, ServiceUnavailableError, SessionNotFoundError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "v2.session.message.edit",
+        summary: "Edit session message",
+        description: "Permanently update one message's text without changing attachments or later messages.",
       }),
     ),
   )

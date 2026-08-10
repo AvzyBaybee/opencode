@@ -41,6 +41,8 @@ import type {
   MessagesListOutput,
   MessagesDeleteInput,
   MessagesDeleteOutput,
+  MessagesEditInput,
+  MessagesEditOutput,
   ModelsListInput,
   ModelsListOutput,
   ProvidersListInput,
@@ -515,6 +517,18 @@ export function make(options: ClientOptions) {
             path: `/api/session/${encodeURIComponent(input.sessionID)}/message/${encodeURIComponent(input.messageID)}`,
             successStatus: 204,
             declaredStatuses: [404, 503, 400, 401],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      edit: (input: MessagesEditInput, requestOptions?: RequestOptions) =>
+        request<MessagesEditOutput>(
+          {
+            method: "PATCH",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/message/${encodeURIComponent(input.messageID)}`,
+            body: { text: input["text"] },
+            successStatus: 204,
+            declaredStatuses: [400, 404, 503, 401],
             empty: true,
           },
           requestOptions,

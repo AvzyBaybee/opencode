@@ -117,6 +117,7 @@ export const createDirSyncContext = (
         index(sessionID)
       },
       apply: serverSync.session.apply,
+      applyV2: serverSync.session.applyV2,
       todo: serverSync.session.todo,
       history: serverSync.session.history,
       evict(sessionID: string) {

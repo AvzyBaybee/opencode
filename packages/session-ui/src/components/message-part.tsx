@@ -174,11 +174,17 @@ export interface MessageProps {
 }
 
 export type SessionAction = (input: { sessionID: string; messageID: string }) => Promise<void> | void
+export type MessageEditAction = (input: {
+  sessionID: string
+  messageID: string
+  text: string
+}) => Promise<void> | void
 
 export type UserActions = {
   fork?: SessionAction
   revert?: SessionAction
   delete?: SessionAction
+  edit?: MessageEditAction
   openAttachment?: (file: FilePart) => void
 }
 
@@ -209,7 +215,7 @@ export interface MessagePartProps {
 
 function MessageActionButton(
   props: Pick<ComponentProps<"button">, "disabled" | "onMouseDown" | "onClick" | "aria-label"> & {
-    icon: "check" | "copy" | "reset" | "trash"
+    icon: "check" | "copy" | "edit" | "reset" | "trash"
     label: JSX.Element
     useV2?: boolean
   },
@@ -1280,6 +1286,21 @@ export function UserMessageDisplay(props: {
       .finally(() => setState("busy", false))
   }
 
+  const edit = () => {
+    const act = props.actions?.edit
+    if (!act || busy()) return
+    setState("busy", true)
+    void Promise.resolve()
+      .then(() =>
+        act({
+          sessionID: props.message.sessionID,
+          messageID: props.message.id,
+          text: text(),
+        }),
+      )
+      .finally(() => setState("busy", false))
+  }
+
   const renderAttachments = () => (
     <Show when={attachments().length > 0}>
       <div data-slot="user-message-attachments">
@@ -1402,6 +1423,20 @@ export function UserMessageDisplay(props: {
                 remove()
               }}
               aria-label={i18n.t("ui.message.deleteMessage")}
+            />
+          </Show>
+          <Show when={props.actions?.edit && text()}>
+            <MessageActionButton
+              icon="edit"
+              label={i18n.t("ui.message.editMessage")}
+              useV2={props.useV2Actions}
+              disabled={!!busy()}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={(event) => {
+                event.stopPropagation()
+                edit()
+              }}
+              aria-label={i18n.t("ui.message.editMessage")}
             />
           </Show>
           <Show when={text()}>
@@ -1770,6 +1805,16 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     })
   }
 
+  const handleEdit = () => {
+    const act = props.actions?.edit
+    if (!act) return
+    void act({
+      sessionID: props.message.sessionID,
+      messageID: props.message.id,
+      text: text(),
+    })
+  }
+
   return (
     <Show when={text()}>
       <div data-component="text-part" data-timeline-part-id={part().id}>
@@ -1797,6 +1842,19 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
                   handleDelete()
                 }}
                 aria-label={i18n.t("ui.message.deleteMessage")}
+              />
+            </Show>
+            <Show when={props.actions?.edit}>
+              <MessageActionButton
+                icon="edit"
+                label={i18n.t("ui.message.editMessage")}
+                useV2={props.useV2Actions}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleEdit()
+                }}
+                aria-label={i18n.t("ui.message.editMessage")}
               />
             </Show>
             <Show when={meta()}>

@@ -34,12 +34,13 @@ const assistantRow = (
   id: SessionMessage.ID,
   seq: number,
   time: { created: DateTime.Utc; completed?: DateTime.Utc } = { created },
+  content: SessionMessage.Assistant["content"] = [],
 ) => {
   const {
     id: _,
     type,
     ...data
-  } = encodeMessage(SessionMessage.Assistant.make({ id, type: "assistant", agent: "build", model, content: [], time }))
+  } = encodeMessage(SessionMessage.Assistant.make({ id, type: "assistant", agent: "build", model, content, time }))
   return { id, session_id: sessionID, type, seq, time_created: DateTime.toEpochMillis(time.created), data }
 }
 
@@ -131,6 +132,92 @@ describe("SessionProjector", () => {
       })
       expect(yield* db.select().from(SessionMessageTable).all()).toEqual([])
       expect(yield* db.select().from(SessionInputTable).all()).toEqual([])
+    }),
+  )
+
+  it.effect("edits user and assistant text without changing message sequence", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+        .run()
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: Project.ID.global,
+          slug: "test",
+          directory: "/project",
+          title: "test",
+          version: "test",
+        })
+        .run()
+      const userID = SessionMessage.ID.make("msg_edit_user")
+      const assistantID = SessionMessage.ID.make("msg_edit_assistant")
+      const events = yield* EventV2.Service
+      yield* events.publish(SessionEvent.Prompted, {
+        sessionID,
+        messageID: userID,
+        timestamp: created,
+        prompt: Prompt.make({ text: "before", files: [{ uri: "file:///tmp/a", mime: "text/plain" }] }),
+        delivery: "steer",
+      })
+      yield* db
+        .insert(SessionMessageTable)
+        .values(
+          assistantRow(assistantID, 2, { created, completed: DateTime.makeUnsafe(1) }, [
+            { type: "text", id: "text_1", text: "assistant before one" },
+            { type: "text", id: "text_2", text: "assistant before two" },
+          ]),
+        )
+        .run()
+
+      yield* events.publish(SessionEvent.MessageEvent.Edited, {
+        sessionID,
+        messageID: userID,
+        text: "user after",
+        timestamp: DateTime.makeUnsafe(2),
+      })
+      yield* events.publish(SessionEvent.MessageEvent.Edited, {
+        sessionID,
+        messageID: assistantID,
+        text: "assistant after",
+        timestamp: DateTime.makeUnsafe(3),
+      })
+
+      const rows = yield* db
+        .select()
+        .from(SessionMessageTable)
+        .where(eq(SessionMessageTable.session_id, sessionID))
+        .orderBy(asc(SessionMessageTable.seq))
+        .all()
+      expect(rows.map((row) => [row.id, row.seq])).toEqual([
+        [userID, 0],
+        [assistantID, 2],
+      ])
+      expect(
+        Schema.decodeUnknownSync(SessionMessage.Message)({ ...rows[0]!.data, id: rows[0]!.id, type: rows[0]!.type }),
+      ).toMatchObject({
+        type: "user",
+        text: "user after",
+        files: [{ uri: "file:///tmp/a" }],
+      })
+      expect(
+        Schema.decodeUnknownSync(SessionMessage.Message)({ ...rows[1]!.data, id: rows[1]!.id, type: rows[1]!.type }),
+      ).toMatchObject({
+        type: "assistant",
+        content: [
+          { type: "text", id: "text_1", text: "assistant before one" },
+          { type: "text", id: "text_2", text: "assistant after" },
+        ],
+      })
+      expect(
+        (yield* db.select({ prompt: SessionInputTable.prompt }).from(SessionInputTable).get())?.prompt,
+      ).toMatchObject({
+        text: "user after",
+        files: [{ uri: "file:///tmp/a" }],
+      })
     }),
   )
 
