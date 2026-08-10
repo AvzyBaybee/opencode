@@ -134,17 +134,55 @@ export function tintColorValue(value: string, reference: HexColor, user: HexColo
   return tinted
 }
 
+function shouldTintV1Token(key: string) {
+  if (key.startsWith("text-")) return false
+  if (key.startsWith("icon-")) return false
+  if (key.startsWith("syntax-")) return false
+  if (key.startsWith("markdown-")) return false
+  if (key.includes("diff")) return false
+  if (key.startsWith("avatar-")) return false
+
+  if (key.startsWith("background-")) return true
+  if (key.startsWith("button-")) return true
+  if (key === "base" || key === "base2" || key === "base3") return true
+
+  if (key.startsWith("surface-")) {
+    const semantic = ["brand", "success", "warning", "critical", "info", "interactive", "diff"]
+    return !semantic.some((name) => key.includes(name))
+  }
+
+  if (key.startsWith("border-")) return true
+
+  if (key.startsWith("input-")) {
+    return key === "input-base" || key === "input-hover" || key === "input-disabled"
+  }
+
+  return false
+}
+
+function shouldTintV2Token(key: string) {
+  if (key.startsWith("v2-grey-")) return true
+  if (key.startsWith("v2-background-")) return true
+  if (key.startsWith("v2-illustration-")) return true
+
+  if (key.startsWith("v2-overlay-simple-tab-") && key.endsWith("-scrim")) return true
+
+  return false
+}
+
 export function tintResolvedTheme(tokens: ResolvedTheme, reference: HexColor, user: HexColor): ResolvedTheme {
-  const result: ResolvedTheme = {}
+  const result: ResolvedTheme = { ...tokens }
   for (const [key, value] of Object.entries(tokens)) {
+    if (!shouldTintV1Token(key)) continue
     result[key] = tintColorValue(value, reference, user) as ResolvedTheme[string]
   }
   return result
 }
 
 export function tintResolvedV2Theme(tokens: ResolvedV2Theme, reference: HexColor, user: HexColor): ResolvedV2Theme {
-  const result: ResolvedV2Theme = {}
+  const result: ResolvedV2Theme = { ...tokens }
   for (const [key, value] of Object.entries(tokens)) {
+    if (!shouldTintV2Token(key)) continue
     result[key] = tintColorValue(value, reference, user)
   }
   return result

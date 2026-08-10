@@ -896,7 +896,7 @@ export const dict = {
   "settings.tab.ava": "Ava's Settings",
   "settings.ava.row.uiBaseColor.title": "UI base color",
   "settings.ava.row.uiBaseColor.description":
-    "Shift the interface tint while keeping light, dark, and accent colors in the same HSB relationships.",
+    "Tint backgrounds, surfaces, buttons, and borders while keeping text, diff colors, and accents unchanged.",
   "settings.ava.row.uiBaseColor.reset": "Reset",
   "settings.ava.row.fileHeaders.title": "Include file headers on read",
   "settings.ava.row.fileHeaders.description":
