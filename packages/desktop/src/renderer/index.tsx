@@ -224,6 +224,12 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     async revealPath(path: string) {
       return window.api.revealPath(path)
     },
+    async browseListDirectory(path: string) {
+      return window.api.browseListDirectory(path)
+    },
+    async browseReadTextFile(path: string) {
+      return window.api.browseReadTextFile(path)
+    },
 
     storage,
     draftStore: createDraftStore({

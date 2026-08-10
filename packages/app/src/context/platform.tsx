@@ -20,6 +20,12 @@ type SaveFilePickerOptions = { title?: string; defaultPath?: string }
 type PlatformName = "web" | "desktop"
 type DesktopOS = "macos" | "windows" | "linux"
 
+export type BrowseDirectoryEntry = {
+  name: string
+  path: string
+  type: "file" | "directory"
+}
+
 export type FatalRendererErrorLog = {
   error: string
   url: string
@@ -43,6 +49,12 @@ type PlatformBase = {
 
   /** Reveal a local path in the system file manager; false when the path does not exist (desktop only) */
   revealPath?(path: string): Promise<boolean>
+
+  /** List a directory for Ava browse tabs without opening a project (desktop only) */
+  browseListDirectory?(path: string): Promise<BrowseDirectoryEntry[]>
+
+  /** Read a UTF-8 text file for Ava browse tabs without opening a project (desktop only) */
+  browseReadTextFile?(path: string): Promise<string | null>
 
   /** Restart the app  */
   restart(): Promise<void>

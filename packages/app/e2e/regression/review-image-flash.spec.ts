@@ -137,7 +137,7 @@ async function openReview(page: Page) {
 
   await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
   await expectSessionTitle(page, title)
-  await page.getByRole("button", { name: "Toggle review" }).click()
+  await page.getByRole("button", { name: "Toggle Side Panel" }).click()
   await expectAppVisible(page.locator('#review-panel [data-component="session-review-v2"]'))
   await expectAppVisible(page.getByRole("button", { name: /preview\.png/ }))
 }

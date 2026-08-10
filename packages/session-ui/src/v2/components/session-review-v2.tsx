@@ -51,6 +51,7 @@ export type SessionReviewV2SidebarProps = {
   filterControls?: string
   filterActiveDescendant?: string
   filterExpanded?: boolean
+  filterPlaceholder?: string
   width?: number
   onWidthChange?: (width: number) => void
   minWidth?: number
@@ -102,8 +103,8 @@ export function SessionReviewV2Sidebar(props: SessionReviewV2SidebarProps) {
               showClearButton={props.filter.length > 0}
               clearLabel={i18n.t("ui.list.clearFilter")}
               onClearClick={() => props.onFilterChange("")}
-              placeholder={i18n.t("ui.sessionReviewV2.filterFiles")}
-              aria-label={i18n.t("ui.sessionReviewV2.filterFiles")}
+              placeholder={props.filterPlaceholder ?? i18n.t("ui.sessionReviewV2.filterFiles")}
+              aria-label={props.filterPlaceholder ?? i18n.t("ui.sessionReviewV2.filterFiles")}
               leadingIcon={
                 <svg
                   width="14"

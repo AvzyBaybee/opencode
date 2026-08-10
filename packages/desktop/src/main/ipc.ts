@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { stat } from "node:fs/promises"
+import { readdir, readFile, stat } from "node:fs/promises"
 import { basename, join } from "node:path"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
@@ -233,6 +233,31 @@ export function registerIpcHandlers(deps: Deps) {
     if (!exists) return false
     shell.showItemInFolder(path)
     return true
+  })
+
+  ipcMain.handle("browse-list-directory", async (_event: IpcMainInvokeEvent, directory: string) => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    return entries
+      .map((entry) => ({
+        name: entry.name,
+        path: join(directory, entry.name),
+        type: entry.isDirectory() ? ("directory" as const) : ("file" as const),
+      }))
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === "directory" ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+  })
+
+  ipcMain.handle("browse-read-text-file", async (_event: IpcMainInvokeEvent, path: string) => {
+    const exists = await stat(path).then(
+      () => true,
+      () => false,
+    )
+    if (!exists) return null
+    const buffer = await readFile(path)
+    if (buffer.includes(0)) return null
+    return new TextDecoder("utf-8", { fatal: false }).decode(buffer)
   })
 
   ipcMain.handle("read-clipboard-image", () => {

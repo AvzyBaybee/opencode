@@ -9,6 +9,7 @@ import {
   Show,
   splitProps,
   type ComponentProps,
+  type JSX,
   type ParentProps,
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
@@ -61,6 +62,7 @@ const FileTreeNodeV2 = (
       draggable: boolean
       kinds?: ReadonlyMap<string, Kind>
       as?: "div" | "button"
+      trailing?: JSX.Element
     },
 ) => {
   const [local, rest] = splitProps(p, [
@@ -73,6 +75,7 @@ const FileTreeNodeV2 = (
     "children",
     "class",
     "classList",
+    "trailing",
   ])
   const kind = () => local.kinds?.get(normalizeFileTreeV2Path(local.node.path))
 
@@ -111,6 +114,7 @@ const FileTreeNodeV2 = (
           </span>
         )
       })()}
+      {local.trailing}
     </Dynamic>
   )
 }
@@ -130,6 +134,8 @@ export default function FileTreeV2(props: {
   draggable?: boolean
   onFileClick?: (file: FileNode) => void
   onFileDoubleClick?: (file: FileNode) => void
+  onFileContextMenu?: (file: FileNode, event: MouseEvent) => void
+  trailing?: (file: FileNode) => JSX.Element
 }) {
   const file = useFile()
   const live = () => props.allowed === undefined
@@ -253,6 +259,12 @@ export default function FileTreeV2(props: {
                           onBlur={() => setFocused(undefined)}
                           onClick={() => selectFile(row().node, props.onFileClick)}
                           onDblClick={() => selectFile(row().node, props.onFileDoubleClick)}
+                          onContextMenu={(event: MouseEvent) => {
+                            if (!props.onFileContextMenu) return
+                            event.preventDefault()
+                            selectFile(row().node, (file) => props.onFileContextMenu?.(file, event))
+                          }}
+                          trailing={props.trailing?.(row().node)}
                         >
                           <GuideLines level={row().level} />
                           <Show when={row().level > 0}>

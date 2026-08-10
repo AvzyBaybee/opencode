@@ -58,6 +58,7 @@ import { SDKProvider, useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { ServerConnection, serverName, useServer } from "@/context/server"
 import { useSettings } from "@/context/settings"
+import { useAvaSimplifySidePanelSetting } from "@/components/ava-simplify-side-panel-setting"
 import { useSync } from "@/context/sync"
 import { useTabs } from "@/context/tabs"
 import { TerminalProvider, useTerminal } from "@/context/terminal"
@@ -366,6 +367,7 @@ export default function Page() {
   const sdk = useSDK()
   const serverSDK = useServerSDK()
   const settings = useSettings()
+  const simplifySidePanel = useAvaSimplifySidePanelSetting()
   const platform = usePlatform()
   const prompt = usePrompt()
   const comments = useComments()
@@ -2513,7 +2515,9 @@ export default function Page() {
                       diffsReady={reviewReady}
                       empty={reviewEmptyText}
                       hasReview={hasReview}
-                      reviewHasFocusableContent={() => hasReview() || reviewV2State.sidebarOpened()}
+                      reviewHasFocusableContent={() =>
+                        hasReview() || reviewV2State.sidebarOpened() || simplifySidePanel.enabled()
+                      }
                       reviewCount={reviewCount}
                       reviewPanel={reviewPanelV2}
                       reviewSidebarToggle={(disabled) => (
@@ -2524,6 +2528,7 @@ export default function Page() {
                         />
                       )}
                       fileBrowserState={reviewV2State}
+                      reviewV2State={reviewV2State}
                       activeDiff={activeReviewFile()}
                       focusReviewDiff={focusReviewDiff}
                       reviewSnap={ui.reviewSnap}

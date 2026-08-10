@@ -1,0 +1,11 @@
+.ava-side-panel-shell [data-slot="tabs-trigger"].ava-side-panel-project-tab,
+.ava-side-panel-shell .ava-side-panel-project-tab {
+  color: var(--color-text-interactive-base, var(--text-interactive-base, #3b82f6));
+}
+
+.ava-side-panel-shell [data-slot="tabs-trigger"].ava-side-panel-project-tab[data-selected],
+.ava-side-panel-shell .ava-side-panel-project-tab[data-selected],
+.ava-side-panel-shell .ava-side-panel-project-tab[aria-selected="true"] {
+  color: var(--color-text-interactive-base, var(--text-interactive-base, #3b82f6));
+  box-shadow: inset 0 -2px 0 currentColor;
+}

@@ -169,7 +169,7 @@ export const dict = {
 
   "command.fileTree.toggle": "切换文件树",
 
-  "command.review.toggle": "切换审查",
+  "command.review.toggle": "Toggle Side Panel",
 
   "command.terminal.new": "新建终端",
   "command.terminal.new.description": "创建新的终端标签页",
@@ -1224,4 +1224,23 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "创建持久化项目图标失败",
   "error.childStore.storeCreateFailed": "创建存储失败",
   "terminal.connectionLost.abnormalClose": "WebSocket 异常关闭：{{code}}",
+  "settings.tab.ava": "Ava's Settings",
+  "settings.ava.row.uiBaseColor.title": "UI base color",
+  "settings.ava.row.uiBaseColor.description": "Tint backgrounds, surfaces, buttons, and borders while keeping text, diff colors, and accents unchanged.",
+  "settings.ava.row.uiBaseColor.reset": "Reset",
+  "settings.ava.row.fileHeaders.title": "Include file headers on read",
+  "settings.ava.row.fileHeaders.description": "Give the AI SYNOPSIS and RULES headers from the top of a file when reading a later section, once per file per user turn.",
+  "settings.ava.row.simplifySidePanel.title": "Simplify Side Panel",
+  "settings.ava.row.simplifySidePanel.description": "Replace Git review with a simple file browser: search files, read content, and browse other folders without changing the project.",
+  "ava.sidePanel.files": "Files",
+  "ava.sidePanel.searchFiles": "Search Files...",
+  "ava.sidePanel.projectFolder": "Project folder",
+  "ava.sidePanel.openFolder": "Open folder",
+  "ava.sidePanel.copyToClipboard": "Copy to clipboard",
+  "ava.sidePanel.copySuccess.title": "Copied to clipboard",
+  "ava.sidePanel.copySuccess.description": "Copied {{count}} file(s) to the clipboard.",
+  "ava.sidePanel.copyFailed.title": "Copy failed",
+  "ava.sidePanel.copyFailed.description": "Could not copy the selected files to the clipboard.",
+  "ava.sidePanel.selectFile": "Select a file to read",
+  "ava.sidePanel.checkboxLabel": "Select {{file}} for copy",
 } satisfies Partial<Record<Keys, string>>

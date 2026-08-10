@@ -188,7 +188,7 @@ async function measureReviewPaneLoad(page: Page, file: string) {
   // and the flow works across review pane implementations.
   await installReviewPaneProbe(page, { file })
   await startReviewPaneProbe(page)
-  await page.getByRole("button", { name: "Toggle review" }).click()
+  await page.getByRole("button", { name: "Toggle Side Panel" }).click()
   await expect(page.locator("#review-panel")).toBeVisible()
   return collectReviewPaneProbe(page)
 }

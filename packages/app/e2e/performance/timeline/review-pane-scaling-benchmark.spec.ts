@@ -169,7 +169,7 @@ function reviewFile(index: number) {
 }
 
 async function measureReviewPaneLoad(page: Page, input: { expectedFile: string; expectedRows: number }) {
-  const toggle = page.getByRole("button", { name: "Toggle review" })
+  const toggle = page.getByRole("button", { name: "Toggle Side Panel" })
   await expect(toggle).toBeVisible()
   await toggle.evaluate((element) => element.setAttribute("data-review-pane-scaling-toggle", ""))
   await installReviewPaneScalingProbe(page, input)

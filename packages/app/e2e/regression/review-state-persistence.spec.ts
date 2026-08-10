@@ -17,7 +17,7 @@ test("restores review mode and selected file per session", async ({ page }) => {
   await setup(page)
   await page.goto(sessionHref(sessionA))
   await expectSessionTitle(page, titleA)
-  await page.getByRole("button", { name: "Toggle review" }).click()
+  await page.getByRole("button", { name: "Toggle Side Panel" }).click()
 
   await selectMode(page, "Git changes", "Branch changes")
   await selectFile(page, "beta.ts")

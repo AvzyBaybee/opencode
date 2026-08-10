@@ -24,7 +24,7 @@ test("navigates to a subagent child session missing from the session list", asyn
   await expect(page.getByRole("heading", { name: parentTitle })).toHaveCount(0)
 
   const titlebarRight = page.locator("#opencode-titlebar-right")
-  await expect(titlebarRight.getByRole("button", { name: "Toggle review" })).toHaveCount(1)
+  await expect(titlebarRight.getByRole("button", { name: "Toggle Side Panel" })).toHaveCount(1)
 })
 
 test("shows the not found fallback when the viewed session is deleted", async ({ page }) => {
