@@ -9,22 +9,61 @@ This is a personal fork of [anomalyco/opencode](https://github.com/anomalyco/ope
 
 **Remotes:** `origin` = my fork (`AvzyBaybee/opencode`), `upstream` = official (`anomalyco/opencode`).
 
-Official OpenCode uses branch `dev` on GitHub; we pull `upstream/dev` into our `Official` branch.
+Official OpenCode uses branch `dev` on GitHub; we pull `upstream/dev` into our `Official` branch. This fork's default branch is `Official`; all feature work happens on `Custom`.
 
-**Rules for AI:**
+### Git workflow rules
+
 - Work on `Custom` for features; never commit custom work to `Official`.
 - Never merge upstream updates automatically — explain changes and ask for approval first.
 - Never delete or overwrite custom features without explaining why.
-- When pulling upstream: compare `Official` vs `upstream/dev`, then merge `Official` into `Custom` and resolve conflicts with plain-English explanations.
-- Use clear commits on `Custom`; run relevant checks before suggesting a push.
+- When pulling upstream: fetch `upstream`, compare `Official` vs `upstream/dev`, update `Official`, then merge `Official` into `Custom` and resolve conflicts with plain-English explanations.
+- Use clear conventional commits on `Custom`; run relevant checks before suggesting a push.
+- Never push to `upstream`. Never force-push without explicit user approval.
+
+### Custom feature rules (merge-safe)
+
+Goal: custom features must survive future official OpenCode updates with minimal merge pain.
+
+**Prefer extension over modification**
+
+- Add new files/modules rather than rewriting existing official code.
+- Prefer official extension points when they exist: `packages/plugin`, `.opencode/plugins`, `.opencode/skills`, config in `.opencode/opencode.jsonc`, agents/commands in `.opencode/`.
+- When official code must change, keep edits small, local, and easy to spot in a diff.
+
+**Isolate custom logic**
+
+- Keep Ava-specific behavior in clearly named files or folders (e.g. `custom/`, `*-custom.ts`, or a dedicated small package) when practical.
+- Do not scatter the same custom behavior across many official files.
+- One feature = one focused change set. Avoid drive-by refactors in official code.
+
+**Protect merge boundaries**
+
+- Never edit generated files (`src/generated`, `src/generated-effect`, or similar). Regenerate via official scripts instead.
+- Avoid editing hot paths that official changes often (core session loop, shared schemas, protocol definitions, migrations) unless there is no alternative — and explain the risk in plain English before doing so.
+- Do not rename or reorganize official files/packages for style preferences.
+- Do not change official dependencies, lockfiles, or CI unless the feature truly requires it.
+
+**Before calling a feature done**
+
+1. Confirm you are on `Custom`, not `Official`.
+2. Run relevant checks from the affected package (e.g. `bun typecheck`; tests from package dirs per rules below).
+3. Review the diff: is custom code isolated? Are official edits minimal and justified?
+4. In the commit message or summary, note which official files were touched and why.
+5. If official files were edited, mention what might conflict when `Official` is updated next.
+
+**When official updates arrive**
+
+- Summarize what changed upstream in plain English before merging.
+- Compare file overlap between upstream changes and our custom edits.
+- Propose a merge plan; never auto-merge or auto-push.
+- After merging `Official` into `Custom`, re-run checks and confirm custom features still work.
 
 ---
 
 - To regenerate the legacy JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - After changing the public Protocol or Server `HttpApi`, run `bun run generate` from `packages/client`. Do not edit `src/generated` or `src/generated-effect` directly.
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk-next` composes Client, Core, and Server.
-- The default branch in this repo is `dev`.
-- Local `main` ref may not exist; use `dev` or `origin/dev` for diffs.
+- For diffs against official OpenCode, compare against `upstream/dev` or the `Official` branch. Upstream's default branch is `dev`; this fork's default branch is `Official`.
 
 ## Branch Names
 
