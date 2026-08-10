@@ -351,6 +351,8 @@ import type {
   V2SessionInterruptResponses,
   V2SessionListErrors,
   V2SessionListResponses,
+  V2SessionMessageDeleteErrors,
+  V2SessionMessageDeleteResponses,
   V2SessionMessageErrors,
   V2SessionMessageResponses,
   V2SessionMessagesErrors,
@@ -5168,6 +5170,42 @@ export class Revert extends HeyApiClient {
   }
 }
 
+export class Message extends HeyApiClient {
+  /**
+   * Delete session message
+   *
+   * Permanently remove one message from session history without reverting file changes.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      messageID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "messageID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      V2SessionMessageDeleteResponses,
+      V2SessionMessageDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/api/session/{sessionID}/message/{messageID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Permission2 extends HeyApiClient {
   /**
    * List session permission requests
@@ -5860,6 +5898,11 @@ export class Session3 extends HeyApiClient {
   private _revert?: Revert
   get revert(): Revert {
     return (this._revert ??= new Revert({ client: this.client }))
+  }
+
+  private _message?: Message
+  get message2(): Message {
+    return (this._message ??= new Message({ client: this.client }))
   }
 
   private _permission?: Permission2

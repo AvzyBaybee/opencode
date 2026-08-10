@@ -48,6 +48,7 @@ export type Event =
   | EventSessionNextRevertStaged
   | EventSessionNextRevertCleared
   | EventSessionNextRevertCommitted
+  | EventSessionNextMessageDeleted
   | EventMessagePartDelta
   | EventSessionDiff
   | EventSessionError
@@ -1192,6 +1193,15 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "session.next.message.deleted"
+        properties: {
+          timestamp: number
+          sessionID: string
+          messageID: string
+        }
+      }
+    | {
+        id: string
         type: "message.part.delta"
         properties: {
           sessionID: string
@@ -1636,6 +1646,7 @@ export type GlobalEvent = {
     | SyncEventSessionNextRevertStaged
     | SyncEventSessionNextRevertCleared
     | SyncEventSessionNextRevertCommitted
+    | SyncEventSessionNextMessageDeleted
 }
 
 /**
@@ -2766,6 +2777,7 @@ export type SessionDurableEvent =
   | SessionNextRevertStaged
   | SessionNextRevertCleared
   | SessionNextRevertCommitted
+  | SessionNextMessageDeleted
 
 export type SessionHistory = {
   data: Array<SessionDurableEvent>
@@ -2897,6 +2909,7 @@ export type V2Event =
   | SessionNextRevertStaged
   | SessionNextRevertCleared
   | SessionNextRevertCommitted
+  | SessionNextMessageDeleted
   | MessagePartDelta
   | SessionDiff
   | SessionError
@@ -3813,6 +3826,22 @@ export type SyncEventSessionNextRevertCommitted = {
   id: string
   syncEvent: {
     type: "session.next.revert.committed.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      timestamp: number
+      sessionID: string
+      messageID: string
+    }
+  }
+}
+
+export type SyncEventSessionNextMessageDeleted = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "session.next.message.deleted.1"
     id: string
     seq: number
     aggregateID: string
@@ -4763,6 +4792,25 @@ export type SessionNextRevertCommitted = {
     [key: string]: unknown
   }
   type: "session.next.revert.committed"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    timestamp: number
+    sessionID: string
+    messageID: string
+  }
+}
+
+export type SessionNextMessageDeleted = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "session.next.message.deleted"
   durable?: {
     aggregateID: string
     seq: number
@@ -6650,6 +6698,16 @@ export type EventSessionNextRevertCleared = {
 export type EventSessionNextRevertCommitted = {
   id: string
   type: "session.next.revert.committed"
+  properties: {
+    timestamp: number
+    sessionID: string
+    messageID: string
+  }
+}
+
+export type EventSessionNextMessageDeleted = {
+  id: string
+  type: "session.next.message.deleted"
   properties: {
     timestamp: number
     sessionID: string
@@ -11951,6 +12009,46 @@ export type V2SessionInterruptResponses = {
 }
 
 export type V2SessionInterruptResponse = V2SessionInterruptResponses[keyof V2SessionInterruptResponses]
+
+export type V2SessionMessageDeleteData = {
+  body?: never
+  path: {
+    sessionID: string
+    messageID: string
+  }
+  query?: never
+  url: "/api/session/{sessionID}/message/{messageID}"
+}
+
+export type V2SessionMessageDeleteErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * MessageNotFoundError | SessionNotFoundError
+   */
+  404: MessageNotFoundError | SessionNotFoundError
+  /**
+   * ServiceUnavailableError
+   */
+  503: ServiceUnavailableError
+}
+
+export type V2SessionMessageDeleteError = V2SessionMessageDeleteErrors[keyof V2SessionMessageDeleteErrors]
+
+export type V2SessionMessageDeleteResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2SessionMessageDeleteResponse = V2SessionMessageDeleteResponses[keyof V2SessionMessageDeleteResponses]
 
 export type V2SessionMessageData = {
   body?: never

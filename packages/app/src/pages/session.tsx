@@ -33,6 +33,8 @@ import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { isScrollKeyTarget, scrollKey, scrollKeyOwner } from "@opencode-ai/ui/scroll-view"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
+import { Dialog } from "@opencode-ai/ui/dialog"
+import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
 import { Button } from "@opencode-ai/ui/button"
@@ -1304,7 +1306,6 @@ export default function Page() {
     </Show>
   )
 
-
   // Getters defer reactive reads to the consuming scope.
   const reviewPanelV2Props = () => ({
     get title() {
@@ -1853,6 +1854,27 @@ export default function Page() {
     },
   }))
 
+  const deleteMutation = useMutation(() => ({
+    mutationFn: async (input: { sessionID: string; messageID: string }) => {
+      const target = sync()
+      await halt(input.sessionID)
+      target.session.apply({
+        type: "message.removed",
+        properties: { sessionID: input.sessionID, messageID: input.messageID },
+      })
+      try {
+        if ((await sdk().protocol) === "v1") {
+          await sdk().client.session.deleteMessage(input)
+        } else {
+          await sdk().client.deleteMessage(input)
+        }
+      } catch (error) {
+        await target.session.sync(input.sessionID, { force: true })
+        throw error
+      }
+    },
+  }))
+
   const restoreMutation = useMutation(() => ({
     mutationFn: async (id: string) => {
       const sessionID = params.id
@@ -1887,6 +1909,7 @@ export default function Page() {
   }))
 
   const reverting = createMemo(() => revertMutation.isPending || restoreMutation.isPending)
+  const deleting = createMemo(() => deleteMutation.isPending)
   const restoring = createMemo(() => (restoreMutation.isPending ? restoreMutation.variables : undefined))
 
   const revert = (input: { sessionID: string; messageID: string }) => {
@@ -1897,6 +1920,57 @@ export default function Page() {
   const restore = (id: string) => {
     if (!params.id || reverting()) return
     return restoreMutation.mutateAsync(id)
+  }
+
+  const DialogDeleteMessage = (props: { onDelete: () => void }) => {
+    if (settings.general.newLayoutDesigns())
+      return (
+        <DialogV2 fit>
+          <DialogHeader hideClose>
+            <DialogTitleGroup
+              title={language.t("ui.message.deleteMessage")}
+              description={language.t("ui.message.deleteMessageConfirm")}
+            />
+          </DialogHeader>
+          <DialogFooter>
+            <ButtonV2 variant="ghost" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </ButtonV2>
+            <ButtonV2 variant="danger" onClick={props.onDelete}>
+              {language.t("ui.message.deleteMessage")}
+            </ButtonV2>
+          </DialogFooter>
+        </DialogV2>
+      )
+
+    return (
+      <Dialog title={language.t("ui.message.deleteMessage")} fit>
+        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
+          <span class="text-14-regular text-text-strong">{language.t("ui.message.deleteMessageConfirm")}</span>
+          <span class="text-14-regular text-text-base">{language.t("ui.message.deleteMessageConfirmBody")}</span>
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </Button>
+            <Button variant="primary" size="large" onClick={props.onDelete}>
+              {language.t("ui.message.deleteMessage")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+
+  const deleteMessage = (input: { sessionID: string; messageID: string }) => {
+    if (deleting()) return
+    dialog.show(() => (
+      <DialogDeleteMessage
+        onDelete={() => {
+          dialog.close()
+          void deleteMutation.mutateAsync(input)
+        }}
+      />
+    ))
   }
 
   const rolled = createMemo(() => {
@@ -1932,7 +2006,7 @@ export default function Page() {
     download()
   }
 
-  const actions = { revert, openAttachment }
+  const actions = { revert, delete: deleteMessage, openAttachment }
 
   createEffect(() => {
     const sessionID = params.id

@@ -42,7 +42,7 @@ export namespace Timeline {
     inlineComments: boolean,
     projectedUserMessages: UserMessage[],
   ) {
-    const turns: { user: UserMessage; assistants: AssistantMessage[] }[] = []
+    const turns: { user: UserMessage; assistants: AssistantMessage[]; orphan?: boolean }[] = []
     const turnByUserID = new Map<string, (typeof turns)[number]>()
     messages.forEach((message) => {
       const projected = getMessage(message.id)
@@ -67,7 +67,24 @@ export namespace Timeline {
         return
       }
       const user = getMessage(projected.parentID)
-      if (user?.role !== "user") return
+      if (user?.role !== "user") {
+        const orphan = {
+          id: projected.id,
+          sessionID: projected.sessionID,
+          role: "user" as const,
+          time: { created: projected.time.created },
+          agent: projected.agent,
+          model: {
+            providerID: projected.providerID,
+            modelID: projected.modelID,
+            variant: projected.variant,
+          },
+        }
+        const turn = { user: orphan, assistants: [projected], orphan: true }
+        turns.push(turn)
+        turnByUserID.set(orphan.id, turn)
+        return
+      }
       const turn = { user, assistants: [projected] }
       turns.push(turn)
       turnByUserID.set(user.id, turn)
@@ -93,6 +110,7 @@ export namespace Timeline {
           status,
           turn.user.id === activeMessageID,
           inlineComments,
+          turn.orphan,
         ),
       ),
     }
@@ -108,11 +126,12 @@ export namespace Timeline {
     isActive: boolean,
     // v2 renders comments inside the user message attachments row instead of a strip row
     inlineComments: boolean,
+    orphan = false,
   ) {
     const rows: TimelineRow.TimelineRow[] = []
 
     const previousUserMessage = index > 0
-    const userParts = getMessageParts(userMessage.id)
+    const userParts = orphan ? [] : getMessageParts(userMessage.id)
     const comments = userParts.flatMap((p) => MessageComment.fromPart(p) ?? [])
     const compaction = userParts.some((p) => p.type === "compaction")
     const interruptedMessageIndex = assistantMessages.findIndex((m) => m.error?.name === "MessageAbortedError")
@@ -152,12 +171,13 @@ export namespace Timeline {
         }),
       )
 
-    rows.push(
-      new TimelineRow.UserMessage({
-        userMessageID: userMessage.id,
-        anchor: inlineComments || comments.length === 0,
-      }),
-    )
+    if (!orphan)
+      rows.push(
+        new TimelineRow.UserMessage({
+          userMessageID: userMessage.id,
+          anchor: inlineComments || comments.length === 0,
+        }),
+      )
 
     if (compaction) {
       rows.push(

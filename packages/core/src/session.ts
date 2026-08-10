@@ -34,6 +34,7 @@ import { SessionEvent } from "./session/event"
 import { SessionInput } from "./session/input"
 import { Snapshot } from "./snapshot"
 import { SessionRevert } from "./session/revert"
+import { SessionDelete } from "./session/delete"
 import { Revert } from "@opencode-ai/schema/revert"
 import { FSUtil } from "./fs-util"
 import { SessionDurable } from "@opencode-ai/schema/durable-event-manifest"
@@ -95,7 +96,7 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Ses
 export class OperationUnavailableError extends Schema.TaggedErrorClass<OperationUnavailableError>()(
   "Session.OperationUnavailableError",
   {
-    operation: Schema.Literals(["move", "shell", "skill", "switchAgent", "compact", "wait"]),
+    operation: Schema.Literals(["move", "shell", "skill", "switchAgent", "compact", "wait", "delete"]),
   },
 ) {}
 
@@ -127,6 +128,10 @@ export interface Interface {
     sessionID: SessionSchema.ID
     messageID: SessionMessage.ID
   }) => Effect.Effect<SessionMessage.Message | undefined>
+  readonly deleteMessage: (input: {
+    sessionID: SessionSchema.ID
+    messageID: SessionMessage.ID
+  }) => Effect.Effect<void, NotFoundError | MessageNotFoundError | OperationUnavailableError>
   readonly context: (
     sessionID: SessionSchema.ID,
   ) => Effect.Effect<SessionMessage.Message[], NotFoundError | MessageDecodeError>
@@ -338,6 +343,15 @@ const layer = Layer.effect(
       message: Effect.fn("V2Session.message")(function* (input) {
         const stored = yield* store.message(input.messageID)
         return stored?.sessionID === input.sessionID ? stored.message : undefined
+      }),
+      deleteMessage: Effect.fn("V2Session.deleteMessage")(function* (input) {
+        yield* result.get(input.sessionID)
+        if ((yield* execution.active).has(input.sessionID))
+          return yield* new OperationUnavailableError({ operation: "delete" })
+        yield* SessionDelete.remove(input).pipe(
+          Effect.provideService(Database.Service, database),
+          Effect.provideService(EventV2.Service, events),
+        )
       }),
       context: Effect.fn("V2Session.context")(function* (sessionID) {
         yield* result.get(sessionID)

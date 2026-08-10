@@ -103,7 +103,7 @@ describe("normalizeSessionMessages", () => {
     })
   })
 
-  test("does not invent a parent for an assistant-only page", () => {
+  test("keeps an assistant visible when its user parent was deleted", () => {
     const source = [
       {
         id: "msg_2",
@@ -115,7 +115,13 @@ describe("normalizeSessionMessages", () => {
       },
     ] satisfies SessionMessageInfo[]
 
-    expect(normalizeSessionMessages("ses_1", source).messages).toEqual([])
+    expect(normalizeSessionMessages("ses_1", source).messages).toMatchObject([
+      {
+        id: "msg_2",
+        role: "assistant",
+        parentID: "msg_2",
+      },
+    ])
   })
 
   test("projects a current shell message into a renderable standalone turn", () => {

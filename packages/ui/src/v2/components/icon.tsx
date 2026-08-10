@@ -33,6 +33,10 @@ const icons = {
     viewBox: "0 0 20 20",
     body: `<path d="M2 10V18H18V10M2 10V2H18V10M2 10H18M5 6H9M5 14H9" stroke="currentColor"/>`,
   },
+  trash: {
+    viewBox: "0 0 20 20",
+    body: `<path d="M4 6H16M8 6V4H12V6M6 6L6.75 17H13.25L14 6M8.5 9V14M11.5 9V14" stroke="currentColor" stroke-linecap="square"/>`,
+  },
   "status-active": {
     viewBox: "0 0 20 20",
     body: `<path d="M18 2H2V10H18V2Z" fill="currentColor" fill-opacity="0.1"/><path d="M2 18H18V10H2V18Z" fill="currentColor" fill-opacity="0.1"/><path d="M2 10V18H18V10M2 10V2H18V10M2 10H18M5 6H9M5 14H9" stroke="currentColor"/>`,

@@ -178,6 +178,7 @@ export type SessionAction = (input: { sessionID: string; messageID: string }) =>
 export type UserActions = {
   fork?: SessionAction
   revert?: SessionAction
+  delete?: SessionAction
   openAttachment?: (file: FilePart) => void
 }
 
@@ -193,6 +194,7 @@ export type UserMessageComment = {
 export interface MessagePartProps {
   part: PartType
   message: MessageType
+  actions?: UserActions
   hideDetails?: boolean
   defaultOpen?: boolean
   toolOpen?: boolean
@@ -207,7 +209,7 @@ export interface MessagePartProps {
 
 function MessageActionButton(
   props: Pick<ComponentProps<"button">, "disabled" | "onMouseDown" | "onClick" | "aria-label"> & {
-    icon: "check" | "copy" | "reset"
+    icon: "check" | "copy" | "reset" | "trash"
     label: JSX.Element
     useV2?: boolean
   },
@@ -952,6 +954,7 @@ export function Message(props: MessageProps) {
           <AssistantMessageDisplay
             message={assistantMessage() as AssistantMessage}
             parts={props.parts}
+            actions={props.actions}
             showAssistantCopyPartID={props.showAssistantCopyPartID}
             showReasoningSummaries={props.showReasoningSummaries}
             useV2Actions={props.useV2Actions}
@@ -965,6 +968,7 @@ export function Message(props: MessageProps) {
 export function AssistantMessageDisplay(props: {
   message: AssistantMessage
   parts: PartType[]
+  actions?: UserActions
   showAssistantCopyPartID?: string | null
   showReasoningSummaries?: boolean
   useV2Actions?: boolean
@@ -1026,6 +1030,7 @@ export function AssistantMessageDisplay(props: {
                     <Part
                       part={item()!}
                       message={props.message}
+                      actions={props.actions}
                       showAssistantCopyPartID={props.showAssistantCopyPartID}
                       useV2Actions={props.useV2Actions}
                     />
@@ -1261,6 +1266,20 @@ export function UserMessageDisplay(props: {
       .finally(() => setState("busy", false))
   }
 
+  const remove = () => {
+    const act = props.actions?.delete
+    if (!act || busy()) return
+    setState("busy", true)
+    void Promise.resolve()
+      .then(() =>
+        act({
+          sessionID: props.message.sessionID,
+          messageID: props.message.id,
+        }),
+      )
+      .finally(() => setState("busy", false))
+  }
+
   const renderAttachments = () => (
     <Show when={attachments().length > 0}>
       <div data-slot="user-message-attachments">
@@ -1372,6 +1391,19 @@ export function UserMessageDisplay(props: {
               aria-label={i18n.t("ui.message.revertMessage")}
             />
           </Show>
+          <Show when={props.actions?.delete}>
+            <MessageActionButton
+              icon="trash"
+              label={i18n.t("ui.message.deleteMessage")}
+              useV2={props.useV2Actions}
+              disabled={!!busy()}
+              onClick={(event) => {
+                event.stopPropagation()
+                remove()
+              }}
+              aria-label={i18n.t("ui.message.deleteMessage")}
+            />
+          </Show>
           <Show when={text()}>
             <MessageActionButton
               icon={copied() ? "check" : "copy"}
@@ -1438,6 +1470,7 @@ export function Part(props: MessagePartProps) {
         component={component()}
         part={props.part}
         message={props.message}
+        actions={props.actions}
         hideDetails={props.hideDetails}
         defaultOpen={props.defaultOpen}
         toolOpen={props.toolOpen}
@@ -1728,6 +1761,15 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     }
   }
 
+  const handleDelete = () => {
+    const act = props.actions?.delete
+    if (!act) return
+    void act({
+      sessionID: props.message.sessionID,
+      messageID: props.message.id,
+    })
+  }
+
   return (
     <Show when={text()}>
       <div data-component="text-part" data-timeline-part-id={part().id}>
@@ -1744,6 +1786,19 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
               onClick={handleCopy}
               aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
             />
+            <Show when={props.actions?.delete}>
+              <MessageActionButton
+                icon="trash"
+                label={i18n.t("ui.message.deleteMessage")}
+                useV2={props.useV2Actions}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleDelete()
+                }}
+                aria-label={i18n.t("ui.message.deleteMessage")}
+              />
+            </Show>
             <Show when={meta()}>
               <span data-slot="text-part-meta" class="text-12-regular text-text-weak cursor-default">
                 {meta()}

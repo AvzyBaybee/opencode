@@ -92,6 +92,33 @@ describe("current session timeline rows", () => {
     ])
   })
 
+  test("renders an assistant whose user parent was deleted without a user row", () => {
+    const source = [
+      {
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [{ type: "text", text: "still here" }],
+        time: { created: 1, completed: 2 },
+      },
+    ] satisfies SessionMessageInfo[]
+    const normalized = normalizeSessionMessages("ses_1", source)
+    const messages = new Map(normalized.messages.map((message) => [message.id, message]))
+
+    const result = Timeline.constructSessionMessageRows(
+      source,
+      (messageID) => messages.get(messageID),
+      (messageID) => normalized.parts.get(messageID) ?? [],
+      true,
+      "idle",
+      true,
+      [],
+    )
+
+    expect(result.rows.map(TimelineRow.key)).toEqual(["assistant-part:msg_assistant:msg_assistant:text:0"])
+  })
+
   test("keeps a projected parent missing from the source page before newer turns", () => {
     const source = [
       { id: "msg_user_1", type: "user", text: "first question", time: { created: 1 } },

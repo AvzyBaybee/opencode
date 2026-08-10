@@ -445,6 +445,14 @@ export namespace RevertEvent {
   })
 }
 
+export namespace MessageEvent {
+  export const Deleted = Event.define({
+    type: "session.next.message.deleted",
+    ...options,
+    schema: { ...Base, messageID: SessionMessage.ID },
+  })
+}
+
 export const DurableDefinitions = Event.inventory(
   AgentSwitched,
   ModelSwitched,
@@ -474,6 +482,7 @@ export const DurableDefinitions = Event.inventory(
   RevertEvent.Staged,
   RevertEvent.Cleared,
   RevertEvent.Committed,
+  MessageEvent.Deleted,
 )
 
 export const Definitions = Event.inventory(
@@ -509,6 +518,7 @@ export const Definitions = Event.inventory(
   RevertEvent.Staged,
   RevertEvent.Cleared,
   RevertEvent.Committed,
+  MessageEvent.Deleted,
 )
 
 export const Durable = Schema.Union(DurableDefinitions, { mode: "oneOf" })

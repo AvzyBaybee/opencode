@@ -31,13 +31,24 @@ export function createSdkForServer({
     }
   })()
 
-  return createOpencodeClient({
+  const client = createOpencodeClient({
     ...config,
     headers: {
       ...(config.headers instanceof Headers ? Object.fromEntries(config.headers.entries()) : config.headers),
       ...auth,
     },
     baseUrl: server.url,
+  })
+  return Object.assign(client, {
+    deleteMessage(input: { sessionID: string; messageID: string }) {
+      return (
+        client as unknown as {
+          message2: {
+            delete(input: { sessionID: string; messageID: string }): Promise<unknown>
+          }
+        }
+      ).message2.delete(input)
+    },
   })
 }
 

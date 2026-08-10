@@ -936,6 +936,14 @@ export function createServerSession(
   const applyV2 = (event: OpenCodeEvent) => {
     if (!("data" in event) || !("sessionID" in event.data) || typeof event.data.sessionID !== "string") return
     const sessionID = event.data.sessionID
+    if ((event.type as string) === "session.next.message.deleted") {
+      const messageID = (event.data as { messageID: string }).messageID
+      apply({
+        type: "message.removed",
+        properties: { sessionID, messageID },
+      })
+      return
+    }
     const reduction = v2.reduce(data.session_message[sessionID] ?? [], event)
     if (reduction) {
       projectV2(reduction)

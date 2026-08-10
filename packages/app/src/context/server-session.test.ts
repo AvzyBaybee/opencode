@@ -213,6 +213,36 @@ describe("server session", () => {
     expect(ctx.store.data.part.msg_2_assistant).toMatchObject([{ type: "text", text: "world" }])
   })
 
+  test("removes V2 deleted messages from current and legacy state", () => {
+    const ctx = setup({ child: session("child") })
+    ctx.store.remember(session("child"))
+    ctx.store.set("session_message", "child", [
+      { id: "msg_deleted", type: "user", text: "remove me", time: { created: 1 } },
+    ])
+    ctx.store.set("message", "child", [
+      {
+        id: "msg_deleted",
+        sessionID: "child",
+        role: "user",
+        time: { created: 1 },
+        agent: "build",
+        model: { providerID: "provider", modelID: "model" },
+      },
+    ])
+    ctx.store.set("part", "msg_deleted", [])
+    ctx.store.applyV2({
+      id: "evt_deleted",
+      created: 2,
+      type: "session.next.message.deleted",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: { sessionID: "child", messageID: "msg_deleted" },
+    } as unknown as OpenCodeEvent)
+
+    expect(ctx.store.data.session_message.child).toEqual([])
+    expect(ctx.store.data.message.child).toEqual([])
+    expect(ctx.store.data.part.msg_deleted).toBeUndefined()
+  })
+
   test("resolves lineage by session ID without directory", async () => {
     const ctx = setup({ child: session("child", "root"), root: session("root") })
 

@@ -1,8 +1,14 @@
 import { Session } from "@opencode-ai/schema/session"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
-import { InvalidCursorError, SessionNotFoundError, UnknownError } from "../errors"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import {
+  InvalidCursorError,
+  MessageNotFoundError,
+  ServiceUnavailableError,
+  SessionNotFoundError,
+  UnknownError,
+} from "../errors"
 
 export const SessionMessagesQuery = Schema.Struct({
   limit: Schema.optional(
@@ -40,6 +46,19 @@ export const MessageGroup = HttpApiGroup.make("server.message")
         summary: "Get session messages",
         description:
           "Retrieve projected messages for a session. Items keep the requested order across pages; use cursor.next or cursor.previous to move through the ordered timeline.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("session.message.delete", "/api/session/:sessionID/message/:messageID", {
+      params: { sessionID: Session.ID, messageID: SessionMessage.ID },
+      success: HttpApiSchema.NoContent,
+      error: [MessageNotFoundError, ServiceUnavailableError, SessionNotFoundError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "v2.session.message.delete",
+        summary: "Delete session message",
+        description: "Permanently remove one message from session history without reverting file changes.",
       }),
     ),
   )

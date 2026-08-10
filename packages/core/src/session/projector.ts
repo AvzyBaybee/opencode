@@ -292,6 +292,48 @@ const layer = Layer.effectDiscard(
           .pipe(Effect.orDie)
       }),
     )
+    yield* events.project(SessionEvent.MessageEvent.Deleted, (event) =>
+      Effect.gen(function* () {
+        const messageID = SessionV1.MessageID.make(event.data.messageID)
+        const rows = yield* db
+          .select()
+          .from(PartTable)
+          .where(and(eq(PartTable.message_id, messageID), eq(PartTable.session_id, event.data.sessionID)))
+          .all()
+          .pipe(Effect.orDie)
+        for (const row of rows) {
+          const previous = usage(row.data)
+          if (previous) yield* applyUsage(db, event.data.sessionID, previous, -1)
+        }
+        yield* db
+          .delete(PartTable)
+          .where(and(eq(PartTable.message_id, messageID), eq(PartTable.session_id, event.data.sessionID)))
+          .run()
+          .pipe(Effect.orDie)
+        yield* db
+          .delete(MessageTable)
+          .where(and(eq(MessageTable.id, messageID), eq(MessageTable.session_id, event.data.sessionID)))
+          .run()
+          .pipe(Effect.orDie)
+        yield* db
+          .delete(SessionMessageTable)
+          .where(
+            and(
+              eq(SessionMessageTable.id, event.data.messageID),
+              eq(SessionMessageTable.session_id, event.data.sessionID),
+            ),
+          )
+          .run()
+          .pipe(Effect.orDie)
+        yield* db
+          .delete(SessionInputTable)
+          .where(
+            and(eq(SessionInputTable.id, event.data.messageID), eq(SessionInputTable.session_id, event.data.sessionID)),
+          )
+          .run()
+          .pipe(Effect.orDie)
+      }),
+    )
     yield* events.project(SessionV1.Event.PartRemoved, (event) =>
       Effect.gen(function* () {
         const row = yield* db

@@ -96,6 +96,44 @@ describe("SessionProjector", () => {
     }),
   )
 
+  it.effect("deletes a projected message and its pending input", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+        .run()
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: Project.ID.global,
+          slug: "test",
+          directory: "/project",
+          title: "test",
+          version: "test",
+        })
+        .run()
+      const messageID = SessionMessage.ID.make("msg_delete")
+      const events = yield* EventV2.Service
+      yield* events.publish(SessionEvent.PromptAdmitted, {
+        sessionID,
+        messageID,
+        timestamp: created,
+        prompt: Prompt.make({ text: "remove me" }),
+        delivery: "steer",
+      })
+      yield* db.insert(SessionMessageTable).values(assistantRow(messageID, 1)).run()
+      yield* events.publish(SessionEvent.MessageEvent.Deleted, {
+        sessionID,
+        messageID,
+        timestamp: DateTime.makeUnsafe(1),
+      })
+      expect(yield* db.select().from(SessionMessageTable).all()).toEqual([])
+      expect(yield* db.select().from(SessionInputTable).all()).toEqual([])
+    }),
+  )
+
   it.effect("orders projected messages and context by durable aggregate sequence", () =>
     Effect.gen(function* () {
       const { db } = yield* Database.Service

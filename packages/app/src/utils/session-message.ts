@@ -90,7 +90,7 @@ export function normalizeSessionMessages(sessionID: string, source: readonly Ses
     if (message.type === "assistant") {
       agent = message.agent
       model = message.model
-      if (!parentID) return
+      const assistantParentID = parentID ?? message.id
       const parent = messages.findLast((item) => item.id === parentID)
       if (parent?.role === "user") {
         parent.agent = message.agent
@@ -100,7 +100,7 @@ export function normalizeSessionMessages(sessionID: string, source: readonly Ses
           variant: message.model.variant,
         }
       }
-      messages.push(assistantMessage(sessionID, parentID, message))
+      messages.push(assistantMessage(sessionID, assistantParentID, message))
       parts.set(message.id, assistantParts(sessionID, message))
       return
     }

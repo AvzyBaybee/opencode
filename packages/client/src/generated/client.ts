@@ -39,6 +39,8 @@ import type {
   SessionsMessageOutput,
   MessagesListInput,
   MessagesListOutput,
+  MessagesDeleteInput,
+  MessagesDeleteOutput,
   ModelsListInput,
   ModelsListOutput,
   ProvidersListInput,
@@ -503,6 +505,17 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [400, 404, 500, 401],
             empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: MessagesDeleteInput, requestOptions?: RequestOptions) =>
+        request<MessagesDeleteOutput>(
+          {
+            method: "DELETE",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/message/${encodeURIComponent(input.messageID)}`,
+            successStatus: 204,
+            declaredStatuses: [404, 503, 400, 401],
+            empty: true,
           },
           requestOptions,
         ),
