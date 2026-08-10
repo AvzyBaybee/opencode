@@ -1,3 +1,25 @@
+## Custom Fork (AvzyBaybee)
+
+This is a personal fork of [anomalyco/opencode](https://github.com/anomalyco/opencode).
+
+| Branch | Purpose |
+|--------|---------|
+| `Official` | Clean copy of official OpenCode — pull upstream updates here |
+| `Custom` | Personal features — all custom work happens here |
+
+**Remotes:** `origin` = my fork (`AvzyBaybee/opencode`), `upstream` = official (`anomalyco/opencode`).
+
+Official OpenCode uses branch `dev` on GitHub; we pull `upstream/dev` into our `Official` branch.
+
+**Rules for AI:**
+- Work on `Custom` for features; never commit custom work to `Official`.
+- Never merge upstream updates automatically — explain changes and ask for approval first.
+- Never delete or overwrite custom features without explaining why.
+- When pulling upstream: compare `Official` vs `upstream/dev`, then merge `Official` into `Custom` and resolve conflicts with plain-English explanations.
+- Use clear commits on `Custom`; run relevant checks before suggesting a push.
+
+---
+
 - To regenerate the legacy JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - After changing the public Protocol or Server `HttpApi`, run `bun run generate` from `packages/client`. Do not edit `src/generated` or `src/generated-effect` directly.
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk-next` composes Client, Core, and Server.
