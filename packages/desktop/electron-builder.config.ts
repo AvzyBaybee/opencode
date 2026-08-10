@@ -31,7 +31,7 @@ async function signWindows(configuration: { path: string }) {
 
 const channel = (() => {
   const raw = process.env.OPENCODE_CHANNEL
-  if (raw === "dev" || raw === "beta" || raw === "prod") return raw
+  if (raw === "dev" || raw === "beta" || raw === "prod" || raw === "local") return raw
   return "dev"
 })()
 
@@ -39,6 +39,7 @@ const APP_IDS = {
   dev: "ai.opencode.desktop.dev",
   beta: "ai.opencode.desktop.beta",
   prod: "ai.opencode.desktop",
+  local: "ai.opencode.desktop.local",
 } as const
 
 const getBase = (appId: string): Configuration => ({
@@ -152,6 +153,16 @@ function getConfig() {
         publish: { provider: "github", owner: "anomalyco", repo: "opencode", channel: "latest" },
         deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
         rpm: { packageName: "opencode", fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
+      }
+    }
+    case "local": {
+      return {
+        ...base,
+        appId,
+        productName: "OpenCode Local",
+        protocols: { name: "OpenCode", schemes: ["opencode"] },
+        deb: { fpm: [metainfoFpm(appId)] },
+        rpm: { packageName: "opencode-local", fpm: [metainfoFpm(appId)] },
       }
     }
   }

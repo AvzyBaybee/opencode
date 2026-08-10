@@ -7,10 +7,13 @@ const theme = fileURLToPath(new URL("./public/oc-theme-preload.js", import.meta.
 
 const channel = (() => {
   const raw = process.env.OPENCODE_CHANNEL
-  if (raw === "dev" || raw === "beta" || raw === "prod") return raw
+  if (raw === "dev" || raw === "beta" || raw === "prod" || raw === "local") return raw
   if (process.env.OPENCODE_CHANNEL === "latest") return "prod"
   return "dev"
 })()
+
+const uiChannel =
+  process.env.OPENCODE_UI_CHANNEL === "prod" ? "prod" : channel === "local" ? "prod" : channel
 
 /**
  * @type {import("vite").PluginOption}
@@ -26,7 +29,7 @@ export default [
           },
         },
         define: {
-          "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(channel),
+          "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(uiChannel),
         },
         worker: {
           format: "es",

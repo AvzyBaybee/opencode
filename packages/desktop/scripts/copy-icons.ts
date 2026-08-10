@@ -2,9 +2,10 @@ import { $ } from "bun"
 import { resolveChannel } from "./utils"
 
 const arg = process.argv[2]
-const channel = arg === "dev" || arg === "beta" || arg === "prod" ? arg : resolveChannel()
+const channel = arg === "dev" || arg === "beta" || arg === "prod" || arg === "local" ? arg : resolveChannel()
 
-const src = `./icons/${channel}`
+const iconChannel = channel === "local" ? "prod" : channel
+const src = `./icons/${iconChannel}`
 const dest = "resources/icons"
 
 await $`rm -rf ${dest}`
