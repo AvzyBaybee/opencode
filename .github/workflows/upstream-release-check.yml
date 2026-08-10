@@ -1,0 +1,162 @@
+name: upstream-release-check
+
+on:
+  schedule:
+  # Monday 09:00 UTC — check for new official OpenCode releases
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+concurrency: upstream-release-check
+
+jobs:
+  check:
+    if: github.repository == 'AvzyBaybee/opencode'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout Official
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: Official
+          fetch-depth: 0
+
+      - name: Load latest upstream release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/anomalyco/opencode/releases/latest > release.json
+          TAG=$(jq -r .tag_name release.json)
+          URL=$(jq -r .html_url release.json)
+          NAME=$(jq -r .name release.json)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Load last notified release
+        id: tracked
+        run: |
+          if [ -f .github/upstream-release.txt ]; then
+            TAG=$(tr -d '[:space:]' < .github/upstream-release.txt)
+          else
+            TAG="none"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Stop if already notified for this release
+        if: steps.release.outputs.tag == steps.tracked.outputs.tag
+        run: |
+          echo "Already notified for release ${{ steps.release.outputs.tag }}."
+
+      - name: Sync Official with upstream release
+        if: steps.release.outputs.tag != steps.tracked.outputs.tag
+        id: sync
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git remote add upstream https://github.com/anomalyco/opencode.git
+          git fetch upstream "refs/tags/${TAG}"
+
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "status=already-contained" >> "$GITHUB_OUTPUT"
+          else
+            BRANCH="sync/upstream-${TAG}"
+            git checkout -B "$BRANCH"
+            git merge FETCH_HEAD -m "chore: sync Official to upstream ${TAG}"
+            echo "status=merged" >> "$GITHUB_OUTPUT"
+            echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          fi
+
+          printf '%s\n' "$TAG" > .github/upstream-release.txt
+          git add .github/upstream-release.txt
+          git commit -m "chore: track upstream release ${TAG}" || true
+
+      - name: Push sync branch
+        if: steps.release.outputs.tag != steps.tracked.outputs.tag && steps.sync.outputs.status == 'merged'
+        env:
+          BRANCH: ${{ steps.sync.outputs.branch }}
+        run: git push -u origin "$BRANCH" --force
+
+      - name: Open pull request
+        if: steps.release.outputs.tag != steps.tracked.outputs.tag && steps.sync.outputs.status == 'merged'
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          URL: ${{ steps.release.outputs.url }}
+          NAME: ${{ steps.release.outputs.name }}
+          BRANCH: ${{ steps.sync.outputs.branch }}
+        run: |
+          BODY=$(cat <<EOF
+          Official OpenCode published a new release.
+
+          **Release:** ${NAME} (${TAG})
+          **Upstream:** ${URL}
+
+          This PR updates the \`Official\` branch to include that release.
+
+          **Next steps (manual):**
+          1. Review this PR on GitHub.
+          2. Merge when ready (nothing merges automatically).
+          3. On your PC, merge \`Official\` into \`Custom\` with AI help if needed.
+
+          EOF
+          )
+          gh pr create \
+            --base Official \
+            --head "$BRANCH" \
+            --title "upstream: OpenCode release ${TAG}" \
+            --body "$BODY" \
+            > pr_url.txt
+          echo "url=$(cat pr_url.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Open notification issue
+        if: steps.release.outputs.tag != steps.tracked.outputs.tag
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          URL: ${{ steps.release.outputs.url }}
+          NAME: ${{ steps.release.outputs.name }}
+          STATUS: ${{ steps.sync.outputs.status }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          if [ "$STATUS" = "already-contained" ]; then
+            DETAIL="Your \`Official\` branch already includes this release. No code sync PR was needed — only the release tracker was updated."
+          else
+            DETAIL="A pull request was opened to update \`Official\`: ${PR_URL}"
+          fi
+
+          BODY=$(cat <<EOF
+          A new official OpenCode release is available.
+
+          **Release:** ${NAME} (${TAG})
+          **Upstream:** ${URL}
+
+          ${DETAIL}
+
+          **What to do:**
+          - Review the PR (if one was opened) and merge when ready.
+          - Then merge \`Official\` into \`Custom\` on your PC with AI assistance.
+          - Nothing has been merged automatically.
+
+          EOF
+          )
+          gh issue create \
+            --title "OpenCode release ${TAG} is available" \
+            --body "$BODY" \
+            > issue_url.txt
+          echo "url=$(cat issue_url.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Push tracker update when already contained
+        if: steps.release.outputs.tag != steps.tracked.outputs.tag && steps.sync.outputs.status == 'already-contained'
+        run: |
+          git checkout Official
+          printf '%s\n' "${{ steps.release.outputs.tag }}" > .github/upstream-release.txt
+          git add .github/upstream-release.txt
+          git commit -m "chore: track upstream release ${{ steps.release.outputs.tag }}"
+          git push origin Official
