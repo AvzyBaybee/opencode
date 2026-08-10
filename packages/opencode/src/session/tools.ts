@@ -23,6 +23,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import type { State } from "@opencode-ai/core/tool/ava-file-headers"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -44,6 +45,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   session: Session.Info
   processor: Pick<SessionProcessor.Handle, "message" | "updateToolCall" | "completeToolCall">
   bypassAgentCheck: boolean
+  fileHeaders: State
+  fileHeadersEnabled: boolean
   messages: SessionV1.WithParts[]
   promptOps: TaskPromptOps
 }) {
@@ -60,6 +63,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     sessionID: input.session.id,
     abort: options.abortSignal!,
     messageID: input.processor.message.id,
+    fileHeaders: input.fileHeaders,
+    fileHeadersEnabled: input.fileHeadersEnabled,
     callID: options.toolCallId,
     extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, promptOps: input.promptOps },
     agent: input.agent.name,

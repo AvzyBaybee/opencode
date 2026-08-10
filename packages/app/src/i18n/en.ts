@@ -893,6 +893,10 @@ export const dict = {
   "settings.section.server": "Server",
   "settings.tab.general": "General",
   "settings.tab.shortcuts": "Shortcuts",
+  "settings.tab.ava": "Ava's Settings",
+  "settings.ava.row.fileHeaders.title": "Include file headers on read",
+  "settings.ava.row.fileHeaders.description":
+    "Give the AI SYNOPSIS and RULES headers from the top of a file when reading a later section, once per file per user turn.",
   "settings.desktop.section.wsl": "WSL",
   "settings.desktop.wsl.title": "WSL integration",
   "settings.desktop.wsl.description": "Run the OpenCode server inside WSL on Windows.",

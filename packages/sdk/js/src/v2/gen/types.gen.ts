@@ -2027,6 +2027,7 @@ export type Config = {
     mcp_timeout?: number
     policies?: Array<ConfigV2ExperimentalPolicy>
   }
+  ava?: ConfigAva
 }
 
 export type Model = {
@@ -3842,6 +3843,10 @@ export type ConfigV2ExperimentalPolicy = {
   action: "provider.use"
   effect: PolicyEffect
   resource: string
+}
+
+export type ConfigAva = {
+  fileHeadersOnRead?: boolean
 }
 
 export type ProjectDirectories = Array<{

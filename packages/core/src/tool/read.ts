@@ -2,6 +2,7 @@ export * as ReadTool from "./read"
 
 import { ToolFailure } from "@opencode-ai/llm"
 import { Effect, Layer, Schema } from "effect"
+import { Config } from "../config"
 import { makeLocationNode } from "../effect/app-node"
 import { FileSystem } from "../filesystem"
 import { Image } from "../image"
@@ -12,6 +13,7 @@ import { ReadToolFileSystem } from "./read-filesystem"
 import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
 import { Tools } from "./tools"
+import { augment, createState, extract, MAX_SCAN_LINES } from "./ava-file-headers"
 
 export const name = "read"
 const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"])
@@ -34,6 +36,7 @@ const layer = Layer.effectDiscard(
     const mutation = yield* LocationMutation.Service
     const image = yield* Image.Service
     const permission = yield* PermissionV2.Service
+    const config = yield* Config.Service
 
     yield* tools
       .register({
@@ -90,7 +93,35 @@ const layer = Layer.effectDiscard(
               }
               if ("encoding" in content && content.encoding === "base64")
                 return yield* Effect.fail(new ReadToolFileSystem.BinaryFileError({ resource }))
-              return content
+
+              const entries = yield* config.entries()
+              if (Config.latest(entries, "ava")?.fileHeadersOnRead !== true) return content
+
+              const page = "type" in content && content.type === "text-page" ? content : undefined
+              const scanned = page
+                ? yield* reader
+                    .read(absolute, resource, { limit: MAX_SCAN_LINES })
+                    .pipe(Effect.catch(() => Effect.succeed(undefined)))
+                : content
+              const headers =
+                scanned && "type" in scanned && scanned.type === "text-page"
+                  ? extract(scanned.content.split(/\r?\n/), scanned.offset)
+                  : scanned && "encoding" in scanned && scanned.encoding === "utf8"
+                    ? extract(scanned.content.split(/\r?\n/))
+                    : []
+              const pageLines = content.content.split(/\r?\n/)
+              const fileContext = augment({
+                state: context.fileHeaders ?? createState(),
+                filepath: absolute,
+                headers,
+                pageStart: page?.offset ?? 1,
+                pageEnd: (page?.offset ?? 1) + pageLines.length - 1,
+              })
+              if (!fileContext) return content
+              return {
+                ...content,
+                content: `${fileContext}\n\n${content.content}`,
+              }
             }).pipe(
               Effect.mapError((error) => {
                 const message =
@@ -113,5 +144,5 @@ const layer = Layer.effectDiscard(
 export const node = makeLocationNode({
   name: "tool/read",
   layer,
-  deps: [ToolRegistry.node, ReadToolFileSystem.node, LocationMutation.node, Image.node, PermissionV2.node],
+  deps: [ToolRegistry.node, ReadToolFileSystem.node, LocationMutation.node, Image.node, PermissionV2.node, Config.node],
 })

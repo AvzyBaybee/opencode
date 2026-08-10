@@ -1,4 +1,5 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { createState } from "@opencode-ai/core/tool/ava-file-headers"
 import { afterEach, describe, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer, Stream } from "effect"
@@ -411,6 +412,23 @@ describe("tool.read truncation", () => {
       expect(result.output).toContain("line14")
       expect(result.output).not.toContain("line0")
       expect(result.output).not.toContain("line15")
+    }),
+  )
+
+  it.live("adds file headers once when reading later pages", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const filepath = path.join(dir, "headers.ts")
+      yield* put(filepath, "// SYNOPSIS: A header-aware file.\n// RULES: Keep changes focused.\nline 3\nline 4")
+      const next = { ...ctx, fileHeadersEnabled: true, fileHeaders: createState() }
+
+      const first = yield* exec(dir, { filePath: filepath, offset: 3, limit: 1 }, next)
+      const second = yield* exec(dir, { filePath: filepath, offset: 4, limit: 1 }, next)
+
+      expect(first.output).toContain("[File context from")
+      expect(first.output).toContain("SYNOPSIS: A header-aware file.")
+      expect(first.output).toContain("RULES: Keep changes focused.")
+      expect(second.output).not.toContain("[File context from")
     }),
   )
 

@@ -1,5 +1,6 @@
 import { Effect, Option, Schema, Scope, Stream } from "effect"
 import { NonNegativeInt } from "@opencode-ai/core/schema"
+import { augment, createState, extract, MAX_SCAN_LINES } from "@opencode-ai/core/tool/ava-file-headers"
 import * as path from "path"
 import * as Tool from "./tool"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -335,7 +336,19 @@ export const ReadTool = Tool.define<
         )
       }
 
-      let output = [`<path>${filepath}</path>`, `<type>file</type>`, "<content>\n"].join("\n")
+      const fileContext =
+        ctx.fileHeadersEnabled === true
+          ? augment({
+              state: ctx.fileHeaders ?? createState(),
+              filepath,
+              headers: extract((yield* lines(filepath, { limit: MAX_SCAN_LINES, offset: 1 })).raw),
+              pageStart: file.offset,
+              pageEnd: file.offset + file.raw.length - 1,
+            })
+          : undefined
+      let output = [fileContext, `<path>${filepath}</path>`, `<type>file</type>`, "<content>\n"]
+        .filter((part): part is string => part !== undefined)
+        .join("\n")
       output += file.raw.map((line, i) => `${i + file.offset}: ${line}`).join("\n")
 
       const last = file.offset + file.raw.length - 1

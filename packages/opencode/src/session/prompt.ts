@@ -32,6 +32,7 @@ import { SessionSummary } from "./summary"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { SessionProcessor } from "./processor"
 import { Tool } from "@/tool/tool"
+import { createState } from "@opencode-ai/core/tool/ava-file-headers"
 import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
@@ -1084,6 +1085,8 @@ const layer = Layer.effect(
         let structured: unknown
         let step = 0
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
+        const fileHeaders = createState()
+        const fileHeadersEnabled = (yield* config.get()).ava?.fileHeadersOnRead === true
 
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
@@ -1229,6 +1232,8 @@ const layer = Layer.effect(
               model,
               processor: handle,
               bypassAgentCheck,
+              fileHeaders,
+              fileHeadersEnabled,
               messages: msgs,
               promptOps,
             }).pipe(
