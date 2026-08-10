@@ -295,6 +295,21 @@
   color: var(--v2-text-text-muted);
   line-height: var(--line-height-normal);
 
+  [data-slot="basic-tool-tool-info-main"] {
+    overflow: visible;
+  }
+
+  [data-slot="reasoning-part-content"] {
+    max-height: 240px;
+    overflow-y: auto;
+    background: transparent;
+    border: none;
+
+    [data-component="markdown"] {
+      margin-top: 0;
+    }
+  }
+
   [data-component="markdown"] {
     margin-top: 16px;
     font-style: normal;

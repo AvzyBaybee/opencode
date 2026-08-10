@@ -736,7 +736,7 @@ export function renderable(part: PartType, showReasoningSummaries = true) {
     return true
   }
   if (part.type === "text") return !!part.text?.trim()
-  if (part.type === "reasoning") return showReasoningSummaries && !!part.text?.trim()
+  if (part.type === "reasoning") return !!part.text?.trim()
   return !!PART_MAPPING[part.type]
 }
 
@@ -832,7 +832,11 @@ export function AssistantParts(props: {
                         showAssistantCopyPartID={props.showAssistantCopyPartID}
                         turnDurationMs={props.turnDurationMs}
                         useV2Actions={props.useV2Actions}
-                        defaultOpen={partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)}
+                        defaultOpen={
+                          item()!.type === "reasoning"
+                            ? (props.showReasoningSummaries ?? false)
+                            : partDefaultOpen(item()!, props.shellToolDefaultOpen, props.editToolDefaultOpen)
+                        }
                       />
                     </Show>
                   </Show>
@@ -1052,6 +1056,11 @@ export function AssistantMessageDisplay(props: {
                       actions={props.actions}
                       showAssistantCopyPartID={props.showAssistantCopyPartID}
                       useV2Actions={props.useV2Actions}
+                      defaultOpen={
+                        item()!.type === "reasoning"
+                          ? (props.showReasoningSummaries ?? false)
+                          : undefined
+                      }
                     />
                   </Show>
                 )
@@ -1890,6 +1899,7 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
 PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   const data = useData()
+  const i18n = useI18n()
   const part = () => props.part as ReasoningPart
   const streaming = createMemo(
     () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
@@ -1899,7 +1909,18 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   return (
     <Show when={text()}>
       <div data-component="reasoning-part" data-timeline-part-id={part().id}>
-        <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+        <BasicTool
+          icon="brain"
+          status={streaming() ? "running" : "completed"}
+          defaultOpen={props.defaultOpen ?? false}
+          trigger={{
+            title: i18n.t("ui.sessionTurn.status.thinking"),
+          }}
+        >
+          <div data-slot="reasoning-part-content">
+            <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+          </div>
+        </BasicTool>
       </div>
     </Show>
   )

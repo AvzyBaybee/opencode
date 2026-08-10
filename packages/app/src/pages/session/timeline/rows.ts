@@ -210,16 +210,10 @@ export namespace Timeline {
       assistantGroupIndex += 1
     })
 
-    if (isActive && status === "busy" && !error && (showReasoning ? assistantPartRefs.length === 0 : true)) {
-      const heading = assistantMessages
-        .flatMap((message) => getMessageParts(message.id))
-        .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))
-        .find((value): value is string => !!value)
-
+    if (isActive && status === "busy" && !error && !hasReasoningText(assistantMessages, getMessageParts)) {
       rows.push(
         new TimelineRow.Thinking({
           userMessageID: userMessage.id,
-          reasoningHeading: heading,
         }),
       )
     }
@@ -251,39 +245,13 @@ export namespace Timeline {
     return rows
   }
 
-  function reasoningHeading(text: string) {
-    const markdown = text.replace(/\r\n?/g, "\n")
-    const html = markdown.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i)
-    if (html?.[1]) {
-      const value = cleanHeading(html[1].replace(/<[^>]+>/g, " "))
-      if (value) return value
-    }
-
-    const atx = markdown.match(/^\s{0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+[ \t]*)?$/m)
-    if (atx?.[1]) {
-      const value = cleanHeading(atx[1])
-      if (value) return value
-    }
-
-    const setext = markdown.match(/^([^\n]+)\n(?:=+|-+)\s*$/m)
-    if (setext?.[1]) {
-      const value = cleanHeading(setext[1])
-      if (value) return value
-    }
-
-    const strong = markdown.match(/^\s*(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/m)
-    if (strong?.[1]) {
-      const value = cleanHeading(strong[1])
-      if (value) return value
-    }
-  }
-
-  function cleanHeading(value: string) {
-    return value
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/[*_~]+/g, "")
-      .trim()
+  function hasReasoningText(
+    assistantMessages: AssistantMessage[],
+    getMessageParts: (messageID: string) => Part[],
+  ) {
+    return assistantMessages
+      .flatMap((message) => getMessageParts(message.id))
+      .some((part) => part.type === "reasoning" && !!part.text?.trim())
   }
 
   function unwrapErrorMessage(message: string) {
