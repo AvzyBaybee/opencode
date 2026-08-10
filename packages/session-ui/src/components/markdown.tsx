@@ -32,6 +32,7 @@ import { markdownBlockKey, type MarkdownToken } from "./markdown-worker-protocol
 import { shouldResetCodeTokens, type RenderedCodeState } from "./markdown-code-state"
 import { getCachedMarkdown, sanitizeMarkdown, touchCachedMarkdown, type MarkdownCacheEntry } from "./markdown-cache"
 import { inlineCodeKind } from "./markdown-inline-code-kind"
+import { resolvePathReference } from "./markdown-path-reference"
 
 type RenderedBlock =
   | (MarkdownCacheEntry & { key: string; mode: Exclude<Block["mode"], "code"> })
@@ -275,7 +276,39 @@ function markInlineCode(root: HTMLDivElement) {
   }
 }
 
-function decorate(root: HTMLDivElement, labels: CopyLabels) {
+function markPathLinks(root: HTMLDivElement, enabled: boolean) {
+  const codeNodes = Array.from(root.querySelectorAll(":not(pre) > code"))
+  for (const code of codeNodes) {
+    if (!(code instanceof HTMLElement)) continue
+    if (!enabled || code.dataset.inlineCodeKind !== "path") {
+      delete code.dataset.pathLink
+      continue
+    }
+    code.dataset.pathLink = "true"
+  }
+}
+
+function setupPathReveal(
+  root: HTMLDivElement,
+  input: { directory: () => string | undefined; revealPath: (path: string) => void },
+) {
+  const handleClick = (event: MouseEvent) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const code = target.closest('code[data-path-link="true"]')
+    if (!(code instanceof HTMLElement)) return
+    event.preventDefault()
+    event.stopPropagation()
+    const resolved = resolvePathReference(code.textContent ?? "", input.directory())
+    if (!resolved) return
+    input.revealPath(resolved)
+  }
+
+  root.addEventListener("click", handleClick)
+  return () => root.removeEventListener("click", handleClick)
+}
+
+function decorate(root: HTMLDivElement, labels: CopyLabels, pathLinks: boolean) {
   const blocks = Array.from(root.querySelectorAll("pre"))
   for (const block of blocks) {
     ensureCodeWrapper(block, labels)
@@ -283,6 +316,7 @@ function decorate(root: HTMLDivElement, labels: CopyLabels) {
   if (!document.body.hasAttribute("data-new-layout")) return
   markInlineCode(root)
   markCodeLinks(root)
+  markPathLinks(root, pathLinks)
 }
 
 function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels) {
@@ -368,9 +402,19 @@ export function Markdown(
     streaming?: boolean
     class?: string
     classList?: Record<string, boolean>
+    directory?: string
+    revealPath?: (path: string) => void
   },
 ) {
-  const [local, others] = splitProps(props, ["text", "cacheKey", "streaming", "class", "classList"])
+  const [local, others] = splitProps(props, [
+    "text",
+    "cacheKey",
+    "streaming",
+    "class",
+    "classList",
+    "directory",
+    "revealPath",
+  ])
   const i18n = useI18n()
   const [root, setRoot] = createSignal<HTMLDivElement>()
   const owner = createUniqueId()
@@ -491,6 +535,7 @@ export function Markdown(
   )
 
   let copyCleanup: (() => void) | undefined
+  let pathRevealCleanup: (() => void) | undefined
 
   createEffect(() => {
     const container = root()
@@ -509,13 +554,14 @@ export function Markdown(
       copy: i18n.t("ui.message.copy"),
       copied: i18n.t("ui.message.copied"),
     }
+    const pathLinks = !!local.revealPath
     const nextCodeKeys = new Set(content.filter((block) => block.mode === "code").map((block) => block.key))
     activeCodeKeys.forEach((key) => {
       if (!nextCodeKeys.has(key)) disposeCode(key)
     })
     activeCodeKeys.clear()
     nextCodeKeys.forEach((key) => activeCodeKeys.add(key))
-    content.forEach((block, index) => updateBlock(container, index, block, labels))
+    content.forEach((block, index) => updateBlock(container, index, block, labels, pathLinks))
     while (container.children.length > content.length) {
       const child = container.lastElementChild
       if (!child) break
@@ -530,9 +576,15 @@ export function Markdown(
         copy: i18n.t("ui.message.copy"),
         copied: i18n.t("ui.message.copied"),
       }))
+    if (!pathRevealCleanup)
+      pathRevealCleanup = setupPathReveal(container, {
+        directory: () => local.directory,
+        revealPath: (path) => local.revealPath?.(path),
+      })
   })
 
   onCleanup(() => {
+    if (pathRevealCleanup) pathRevealCleanup()
     if (copyCleanup) copyCleanup()
     disposeMarkdownProjection(owner)
     activeCodeKeys.forEach(disposeCode)
@@ -586,7 +638,13 @@ function disposeCode(key: string) {
   disposeStreamingCode(key)
 }
 
-function updateBlock(container: HTMLDivElement, index: number, block: RenderedBlock, labels: CopyLabels) {
+function updateBlock(
+  container: HTMLDivElement,
+  index: number,
+  block: RenderedBlock,
+  labels: CopyLabels,
+  pathLinks: boolean,
+) {
   const current = container.children[index]
   if (block.mode === "code") {
     updateCodeBlock(container, current, block, labels)
@@ -605,7 +663,7 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
   next.dataset.markdownHash = block.hash
   next.style.display = "contents"
   next.innerHTML = block.html
-  decorate(next, labels)
+  decorate(next, labels, pathLinks)
 
   if (!(current instanceof HTMLDivElement)) {
     container.appendChild(next)

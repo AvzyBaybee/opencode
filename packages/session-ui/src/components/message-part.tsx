@@ -186,6 +186,7 @@ export type UserActions = {
   delete?: SessionAction
   edit?: MessageEditAction
   openAttachment?: (file: FilePart) => void
+  revealPath?: (path: string) => void
 }
 
 export type UserMessageComment = {
@@ -341,7 +342,13 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
   return value
 }
 
-function PacedMarkdown(props: { text: string; cacheKey: string; streaming: boolean }) {
+function PacedMarkdown(props: {
+  text: string
+  cacheKey: string
+  streaming: boolean
+  directory?: string
+  revealPath?: (path: string) => void
+}) {
   const value = createPacedValue(
     () => props.text,
     () => props.streaming,
@@ -349,7 +356,13 @@ function PacedMarkdown(props: { text: string; cacheKey: string; streaming: boole
 
   return (
     <Show when={value()}>
-      <Markdown text={value()} cacheKey={props.cacheKey} streaming={props.streaming} />
+      <Markdown
+        text={value()}
+        cacheKey={props.cacheKey}
+        streaming={props.streaming}
+        directory={props.directory}
+        revealPath={props.revealPath}
+      />
     </Show>
   )
 }
@@ -1819,7 +1832,13 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     <Show when={text()}>
       <div data-component="text-part" data-timeline-part-id={part().id}>
         <div data-slot="text-part-body">
-          <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
+          <PacedMarkdown
+            text={text()}
+            cacheKey={part().id}
+            streaming={streaming()}
+            directory={data.directory}
+            revealPath={props.actions?.revealPath}
+          />
         </div>
         <Show when={showCopy()}>
           <div data-slot="text-part-copy-wrapper" data-interrupted={interrupted() ? "" : undefined}>

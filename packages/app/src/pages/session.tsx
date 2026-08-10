@@ -2094,7 +2094,17 @@ export default function Page() {
     download()
   }
 
-  const actions = { revert, delete: deleteMessage, edit: editMessage, openAttachment }
+  const actions = {
+    revert,
+    delete: deleteMessage,
+    edit: editMessage,
+    openAttachment,
+    revealPath: platform.revealPath
+      ? (path: string) => {
+          void platform.revealPath!(path)
+        }
+      : undefined,
+  }
 
   createEffect(() => {
     const sessionID = params.id

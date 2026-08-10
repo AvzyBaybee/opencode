@@ -259,6 +259,17 @@
     );
   }
 
+  :not(pre) > code[data-path-link="true"] {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklch, var(--markdown-inline-code-path-color) 35%, transparent);
+    text-underline-offset: 2px;
+  }
+
+  :not(pre) > code[data-path-link="true"]:hover {
+    color: color-mix(in oklch, var(--markdown-inline-code-path-color) 85%, var(--v2-text-text-base));
+  }
+
   a.external-link > code[data-inline-code-kind="url"] {
     color: var(--markdown-inline-code-color);
     background: none;
