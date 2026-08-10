@@ -7,6 +7,7 @@ import { File } from "@opencode-ai/session-ui/file"
 import { Font } from "@opencode-ai/ui/font"
 import { Splash } from "@opencode-ai/ui/logo"
 import { ThemeProvider } from "@opencode-ai/ui/theme/context"
+import { AvaUiThemeSync } from "@/components/ava-ui-theme-sync"
 import { MetaProvider } from "@solidjs/meta"
 import {
   type BaseRouterProps,
@@ -404,6 +405,7 @@ export function AppBaseProviders(
           void window.api?.setTitlebar?.({ mode, scheme })
         }}
       >
+        <AvaUiThemeSync />
         <LanguageProvider locale={props.locale} onNativeTranslations={props.onNativeTranslations}>
           <UiI18nBridge>
             <ErrorBoundary

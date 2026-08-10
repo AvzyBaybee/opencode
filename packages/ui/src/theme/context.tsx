@@ -7,7 +7,8 @@ import { createSimpleContext } from "../context/helper"
 import oc2ThemeJson from "./themes/oc-2.json"
 import { resolveThemeVariant, themeToCss } from "./resolve"
 import { resolveThemeVariantV2, themeV2ToCss } from "./v2/resolve"
-import type { DesktopTheme } from "./types"
+import type { DesktopTheme, HexColor } from "./types"
+import { getThemeReferenceBase, tintResolvedTheme, tintResolvedV2Theme } from "./tint"
 
 export type ColorScheme = "light" | "dark" | "system"
 
@@ -130,12 +131,20 @@ function getSystemMode(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
 }
 
-function applyThemeCss(theme: DesktopTheme, themeId: string, mode: "light" | "dark") {
+function applyThemeCss(
+  theme: DesktopTheme,
+  themeId: string,
+  mode: "light" | "dark",
+  uiBaseColor?: HexColor | null,
+) {
   const isDark = mode === "dark"
   const variant = isDark ? theme.dark : theme.light
-  const tokens = resolveThemeVariant(variant, isDark)
+  const reference = getThemeReferenceBase(theme, isDark)
+  const resolved = resolveThemeVariant(variant, isDark)
+  const resolvedV2 = resolveThemeVariantV2(variant, isDark)
+  const tokens = uiBaseColor ? tintResolvedTheme(resolved, reference, uiBaseColor) : resolved
   const css = themeToCss(tokens)
-  const v2 = themeV2ToCss(resolveThemeVariantV2(variant, isDark))
+  const v2 = themeV2ToCss(uiBaseColor ? tintResolvedV2Theme(resolvedV2, reference, uiBaseColor) : resolvedV2)
 
   if (themeId !== "oc-2") {
     write(isDark ? STORAGE_KEYS.THEME_CSS_DARK : STORAGE_KEYS.THEME_CSS_LIGHT, `${css}\n  ${v2}`)
@@ -189,6 +198,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       mode,
       previewThemeId: null as string | null,
       previewScheme: null as ColorScheme | null,
+      uiBaseColor: null as HexColor | null,
     })
 
     const loads = new Map<string, Promise<DesktopTheme | undefined>>()
@@ -216,7 +226,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     }
 
     const applyTheme = (theme: DesktopTheme, themeId: string, mode: "light" | "dark", scheme: ColorScheme) => {
-      applyThemeCss(theme, themeId, mode)
+      applyThemeCss(theme, themeId, mode, store.uiBaseColor)
       props.onThemeApplied?.(theme, mode, scheme)
     }
 
@@ -278,11 +288,12 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       })
     })
 
-    createEffect(() => {
-      const theme = store.themes[store.themeId]
-      if (!theme) return
-      applyTheme(theme, store.themeId, store.mode, store.colorScheme)
-    })
+  createEffect(() => {
+    const theme = store.themes[store.themeId]
+    if (!theme) return
+    store.uiBaseColor
+    applyTheme(theme, store.themeId, store.mode, store.colorScheme)
+  })
 
     const setTheme = (id: string) => {
       const next = normalize(id)
@@ -368,6 +379,8 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           applyTheme(theme, store.themeId, store.mode, store.colorScheme)
         })
       },
+      uiBaseColor: () => store.uiBaseColor,
+      setUiBaseColor: (color: HexColor | null) => setStore("uiBaseColor", color),
     }
   },
 })
