@@ -36,6 +36,13 @@ const resolve = (policy: CachePolicy | undefined): CachePolicyObject => {
   return policy
 }
 
+export const effectiveTtlSeconds = (request: LLMRequest) => {
+  if (!RESPECTS_INLINE_HINTS.has(request.model.route.id)) return
+  const policy = resolve(request.cache)
+  if (policy === NONE || (!policy.tools && !policy.system && !policy.messages)) return
+  return policy.ttlSeconds !== undefined && policy.ttlSeconds >= 3600 ? 3600 : 300
+}
+
 // Protocols whose wire format ignores inline cache markers (OpenAI's implicit
 // prefix caching, Gemini's implicit + out-of-band CachedContent). Skip the
 // whole policy pass for these — emitting hints would be harmless but pointless.

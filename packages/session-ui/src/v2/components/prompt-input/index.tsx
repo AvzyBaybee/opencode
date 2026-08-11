@@ -45,6 +45,7 @@ export type PromptInputV2Props = {
   variantControlVisible?: boolean
   attachKeybind?: string[]
   attachShortcut?: string
+  submitWrapper?: (button: JSX.Element) => JSX.Element
 }
 
 export function PromptInputV2(props: PromptInputV2Props) {
@@ -270,6 +271,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             stopLabel={i18n.t("ui.promptInput.stop")}
             onSubmit={props.controller.submit}
             onStop={props.controller.stop}
+            wrapper={props.submitWrapper}
           />
         </div>
       </form>
@@ -680,37 +682,44 @@ export function PromptInputV2SubmitButton(props: {
   stopLabel: string
   onSubmit: () => void
   onStop: () => void
+  wrapper?: (button: JSX.Element) => JSX.Element
 }) {
+  const button = (
+    <IconButton
+      data-action="prompt-submit"
+      type="button"
+      disabled={!props.stopping && props.disabled}
+      tabIndex={props.mode === "normal" ? undefined : -1}
+      icon={props.stopping ? "stop" : props.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
+      variant="primary"
+      class="size-7 rounded-md p-[6px] text-v2-icon-icon-muted shadow-[var(--v2-elevation-button-contrast)] disabled:opacity-50"
+      style={{
+        "background-image":
+          "linear-gradient(180deg,var(--v2-alpha-light-20) 0%,var(--v2-alpha-light-0) 100%),linear-gradient(90deg,var(--v2-background-bg-contrast) 0%,var(--v2-background-bg-contrast) 100%)",
+      }}
+      aria-label={props.stopping ? props.stopLabel : props.sendLabel}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (props.stopping) {
+          props.onStop()
+          return
+        }
+        props.onSubmit()
+      }}
+    />
+  )
+
   return (
-    <TooltipV2
-      placement="top"
-      inactive={!props.stopping && props.disabled}
-      value={props.stopping ? props.stopLabel : props.sendLabel}
-    >
-      <IconButton
-        data-action="prompt-submit"
-        type="button"
-        disabled={!props.stopping && props.disabled}
-        tabIndex={props.mode === "normal" ? undefined : -1}
-        icon={props.stopping ? "stop" : props.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
-        variant="primary"
-        class="size-7 rounded-md p-[6px] text-v2-icon-icon-muted shadow-[var(--v2-elevation-button-contrast)] disabled:opacity-50"
-        style={{
-          "background-image":
-            "linear-gradient(180deg,var(--v2-alpha-light-20) 0%,var(--v2-alpha-light-0) 100%),linear-gradient(90deg,var(--v2-background-bg-contrast) 0%,var(--v2-background-bg-contrast) 100%)",
-        }}
-        aria-label={props.stopping ? props.stopLabel : props.sendLabel}
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          if (props.stopping) {
-            props.onStop()
-            return
-          }
-          props.onSubmit()
-        }}
-      />
-    </TooltipV2>
+    props.wrapper?.(button) ?? (
+      <TooltipV2
+        placement="top"
+        inactive={!props.stopping && props.disabled}
+        value={props.stopping ? props.stopLabel : props.sendLabel}
+      >
+        {button}
+      </TooltipV2>
+    )
   )
 }
 

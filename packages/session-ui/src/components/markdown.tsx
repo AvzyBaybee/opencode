@@ -101,6 +101,22 @@ type CopyButtonState = {
 
 const copyButtonState = new WeakMap<HTMLElement, CopyButtonState>()
 
+type PreviewLabels = {
+  raw: string
+  markdown: string
+}
+
+type PreviewButtonState = {
+  setLabels: Setter<PreviewLabels>
+  setPreview: Setter<boolean>
+  dispose: () => void
+}
+
+const previewButtonState = new WeakMap<HTMLElement, PreviewButtonState>()
+const floatingCopyButtons = new WeakMap<HTMLElement, HTMLElement>()
+const copyPlaceholders = new WeakMap<HTMLElement, HTMLDivElement>()
+const markdownActionOwner = new WeakMap<HTMLElement, HTMLDivElement>()
+
 const urlPattern = /^https?:\/\/[^\s<>()`"']+$/
 
 function codeUrl(text: string) {
@@ -151,6 +167,32 @@ function MarkdownCopyButton(props: { labels: Accessor<CopyLabels>; copied: Acces
   )
 }
 
+function createPreviewButton(labels: PreviewLabels) {
+  const host = document.createElement("div")
+  host.setAttribute("data-slot", "markdown-preview-button")
+
+  const state: Partial<PreviewButtonState> = {}
+  const dispose = render(() => {
+    const [labelState, setLabels] = createSignal(labels, { equals: false })
+    const [preview, setPreview] = createSignal(false)
+    state.setLabels = setLabels
+    state.setPreview = setPreview
+    return <MarkdownPreviewButton labels={labelState} preview={preview} />
+  }, host)
+  state.dispose = dispose
+  previewButtonState.set(host, state as PreviewButtonState)
+  return host
+}
+
+function MarkdownPreviewButton(props: { labels: Accessor<PreviewLabels>; preview: Accessor<boolean> }) {
+  const label = () => (props.preview() ? props.labels().markdown : props.labels().raw)
+  return (
+    <button type="button" class="markdown-preview-toggle" aria-label={label()}>
+      {label()}
+    </button>
+  )
+}
+
 function setCopyState(host: HTMLElement, labels: CopyLabels, copied: boolean) {
   const state = copyButtonState.get(host)
   state?.setLabels(labels)
@@ -167,6 +209,11 @@ function disposeCopyButton(host: HTMLElement) {
   copyButtonState.delete(host)
 }
 
+function disposePreviewButton(host: HTMLElement) {
+  previewButtonState.get(host)?.dispose()
+  previewButtonState.delete(host)
+}
+
 function disposeCopyButtons(root: Element) {
   const hosts = [
     ...(root instanceof HTMLElement && root.getAttribute("data-slot") === "markdown-copy-button" ? [root] : []),
@@ -175,14 +222,19 @@ function disposeCopyButtons(root: Element) {
     ),
   ]
   hosts.forEach(disposeCopyButton)
+  Array.from(root.querySelectorAll('[data-slot="markdown-preview-button"]'))
+    .filter((el): el is HTMLElement => el instanceof HTMLElement)
+    .forEach(disposePreviewButton)
 }
 
 const shellLanguages = new Set(["bash", "sh", "shell", "zsh", "fish", "console", "terminal"])
+const markdownLanguages = new Set(["md", "markdown", "mdx"])
 
 function codeKind(language: string | undefined) {
   const value = language?.toLowerCase()
-  if (!value) return
+  if (!value) return "markdown"
   if (shellLanguages.has(value)) return "shell"
+  if (markdownLanguages.has(value)) return "markdown"
 }
 
 function codeLanguage(block: HTMLPreElement) {
@@ -206,35 +258,70 @@ function applyCodeMetadata(wrapper: HTMLElement, language: string | undefined) {
   else delete wrapper.dataset.codeKind
 }
 
-function ensureCodeWrapper(block: HTMLPreElement, labels: CopyLabels) {
+function ensureCodeActions(
+  wrapper: HTMLElement,
+  language: string | undefined,
+  labels: CopyLabels,
+  previewLabels: PreviewLabels,
+) {
+  const actions = wrapper.querySelector<HTMLElement>('[data-slot="markdown-code-actions"]')
+  const floatingCopy = floatingCopyButtons.get(wrapper)
+  if (!actions) {
+    const next = document.createElement("div")
+    next.setAttribute("data-slot", "markdown-code-actions")
+    wrapper.prepend(next)
+    return ensureCodeActions(wrapper, language, labels, previewLabels)
+  }
+
+  let copy = actions.querySelector<HTMLElement>('[data-slot="markdown-copy-button"]') ?? floatingCopy
+  if (copy) {
+    if (copy.parentElement !== actions && !floatingCopyButtons.has(wrapper)) actions.appendChild(copy)
+  } else {
+    copy = createCopyButton(labels)
+    actions.appendChild(copy)
+  }
+
+  const isMarkdown = codeKind(language) === "markdown"
+  const preview = actions.querySelector('[data-slot="markdown-preview-button"]')
+  if (isMarkdown && !preview) {
+    const next = createPreviewButton(previewLabels)
+    const placeholder = copy ? copyPlaceholders.get(copy) : undefined
+    if (copy?.parentElement === actions) actions.insertBefore(next, copy)
+    else if (placeholder?.parentElement === actions) actions.insertBefore(next, placeholder)
+    else actions.appendChild(next)
+    return
+  }
+  if (
+    isMarkdown &&
+    preview instanceof HTMLElement &&
+    copy?.parentElement === actions &&
+    preview.nextElementSibling !== copy
+  )
+    actions.insertBefore(preview, copy)
+  if (!isMarkdown && preview instanceof HTMLElement) {
+    disposePreviewButton(preview)
+    preview.remove()
+  }
+}
+
+function ensureCodeWrapper(block: HTMLPreElement, labels: CopyLabels, previewLabels: PreviewLabels) {
   const parent = block.parentElement
   if (!parent) return
   const wrapped = parent.getAttribute("data-component") === "markdown-code"
   if (!wrapped) {
     const wrapper = document.createElement("div")
     wrapper.setAttribute("data-component", "markdown-code")
-    applyCodeMetadata(wrapper, codeLanguage(block))
+    const language = codeLanguage(block)
+    applyCodeMetadata(wrapper, language)
     parent.replaceChild(wrapper, block)
     wrapper.appendChild(block)
-    wrapper.appendChild(createCopyButton(labels))
+    ensureCodeActions(wrapper, language, labels, previewLabels)
     return
   }
 
-  applyCodeMetadata(parent, codeLanguage(block))
-
-  const buttons = Array.from(parent.querySelectorAll('[data-slot="markdown-copy-button"]')).filter(
-    (el): el is HTMLButtonElement => el instanceof HTMLButtonElement,
-  )
-
-  if (buttons.length === 0) {
-    parent.appendChild(createCopyButton(labels))
-    return
-  }
-
-  for (const button of buttons.slice(1)) {
-    disposeCopyButton(button)
-    button.remove()
-  }
+  const language = codeLanguage(block)
+  applyCodeMetadata(parent, language)
+  ensureCodeActions(parent, language, labels, previewLabels)
 }
 
 function markCodeLinks(root: HTMLDivElement) {
@@ -345,10 +432,10 @@ function setupPathReveal(
   }
 }
 
-function decorate(root: HTMLDivElement, labels: CopyLabels, pathLinks: boolean) {
+function decorate(root: HTMLDivElement, labels: CopyLabels, previewLabels: PreviewLabels, pathLinks: boolean) {
   const blocks = Array.from(root.querySelectorAll("pre"))
   for (const block of blocks) {
-    ensureCodeWrapper(block, labels)
+    ensureCodeWrapper(block, labels, previewLabels)
   }
   if (!document.body.hasAttribute("data-new-layout")) return
   markInlineCode(root)
@@ -356,13 +443,17 @@ function decorate(root: HTMLDivElement, labels: CopyLabels, pathLinks: boolean) 
   markPathLinks(root, pathLinks)
 }
 
-function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels) {
+function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels, getPreviewLabels: () => PreviewLabels) {
   const timeouts = new Map<HTMLElement, ReturnType<typeof setTimeout>>()
 
   const updateLabel = (button: HTMLElement) => {
     const labels = getLabels()
     const copied = button.getAttribute("data-copied") === "true"
     setCopyState(button, labels, copied)
+  }
+
+  const updatePreviewLabel = (button: HTMLElement) => {
+    previewButtonState.get(button)?.setLabels(getPreviewLabels())
   }
 
   const handleClick = async (event: MouseEvent) => {
@@ -385,19 +476,187 @@ function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels) {
     timeouts.set(button, timeout)
   }
 
+  const handlePreviewClick = async (event: MouseEvent) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const button = target.closest('[data-slot="markdown-preview-button"]')
+    if (!(button instanceof HTMLElement)) return
+    const wrapper = button.closest('[data-component="markdown-code"]')
+    if (!(wrapper instanceof HTMLElement)) return
+    const code = wrapper.querySelector("code")
+    const pre = wrapper.querySelector("pre")
+    if (!(code instanceof HTMLElement) || !(pre instanceof HTMLElement)) return
+
+    if (wrapper.dataset.displayMode === "preview") {
+      wrapper.dataset.displayMode = "raw"
+      wrapper.querySelector('[data-slot="markdown-code-preview"]')?.remove()
+      pre.hidden = false
+      previewButtonState.get(button)?.setPreview(false)
+      return
+    }
+
+    const preview = document.createElement("div")
+    preview.setAttribute("data-slot", "markdown-code-preview")
+    preview.setAttribute("data-component", "markdown")
+    const parsed = await parseMarkdown(code.textContent ?? "").catch(() => "")
+    preview.innerHTML = sanitizeMarkdown(parsed)
+    wrapper.dataset.displayMode = "preview"
+    pre.hidden = true
+    wrapper.appendChild(preview)
+    previewButtonState.get(button)?.setPreview(true)
+  }
+
+  const handleFloatingClick = (event: MouseEvent) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const button = target.closest('[data-slot="markdown-copy-button"], [data-slot="markdown-preview-button"]')
+    const actions = button?.closest<HTMLElement>('[data-slot="markdown-code-actions"]')
+    if (!(button instanceof HTMLElement)) return
+    const owner = markdownActionOwner.get(button) ?? (actions ? markdownActionOwner.get(actions) : undefined)
+    if (owner !== root || root.contains(button)) return
+    if (button.matches('[data-slot="markdown-copy-button"]')) {
+      void handleClick(event)
+      return
+    }
+    void handlePreviewClick(event)
+  }
+
   const buttons = Array.from(root.querySelectorAll('[data-slot="markdown-copy-button"]'))
   for (const button of buttons) {
     if (button instanceof HTMLElement) updateLabel(button)
   }
+  root.querySelectorAll<HTMLElement>('[data-slot="markdown-preview-button"]').forEach(updatePreviewLabel)
 
   root.addEventListener("click", handleClick)
+  root.addEventListener("click", handlePreviewClick)
+  document.addEventListener("click", handleFloatingClick)
 
   return () => {
     root.removeEventListener("click", handleClick)
+    root.removeEventListener("click", handlePreviewClick)
+    document.removeEventListener("click", handleFloatingClick)
     for (const timeout of timeouts.values()) {
       clearTimeout(timeout)
     }
     disposeCopyButtons(root)
+  }
+}
+
+function setupStickyCodeActions(root: HTMLDivElement) {
+  const scrollable = root.closest<HTMLElement>("[data-scrollable]")
+  const tracked = new Set<HTMLElement>()
+  let frame: number | undefined
+
+  const reset = (copy: HTMLElement) => {
+    const placeholder = copyPlaceholders.get(copy)
+    const wrapper = placeholder?.parentElement
+    if (placeholder?.parentElement) placeholder.after(copy)
+    else if (copy.parentElement === document.body) copy.remove()
+    if (wrapper) floatingCopyButtons.delete(wrapper)
+    placeholder?.remove()
+    copyPlaceholders.delete(copy)
+    copy.style.position = ""
+    copy.style.top = ""
+    copy.style.left = ""
+    copy.style.width = ""
+    copy.classList.remove("markdown-copy-button-floating")
+    delete copy.dataset.stuck
+    markdownActionOwner.delete(copy)
+  }
+
+  const update = () => {
+    frame = undefined
+    const viewport = scrollable?.getBoundingClientRect()
+    const viewportTop = Math.max(4, viewport?.top ?? 0)
+    const header = scrollable?.querySelector<HTMLElement>("[data-session-title]")
+    const headerRect = header?.getBoundingClientRect()
+    const safeTop =
+      headerRect && headerRect.top <= viewportTop + 1 && headerRect.bottom > viewportTop
+        ? headerRect.bottom
+        : viewportTop
+    const viewportBottom = Math.min(window.innerHeight, viewport?.bottom ?? window.innerHeight)
+
+    root
+      .querySelectorAll<HTMLElement>('[data-slot="markdown-code-actions"] > [data-slot="markdown-copy-button"]')
+      .forEach((copy) => tracked.add(copy))
+    tracked.forEach((copy) => {
+      const slot = copyPlaceholders.get(copy)
+      const wrapper =
+        copy.closest<HTMLElement>('[data-component="markdown-code"]') ??
+        slot?.parentElement?.closest<HTMLElement>('[data-component="markdown-code"]')
+      if (!wrapper) {
+        reset(copy)
+        tracked.delete(copy)
+        return
+      }
+
+      markdownActionOwner.set(copy, root)
+      const wrapperRect = wrapper.getBoundingClientRect()
+      const copyRect = copy.getBoundingClientRect()
+      const canPin =
+        (copy.dataset.stuck ? wrapperRect.top : copyRect.top) < safeTop &&
+        wrapperRect.bottom > safeTop + copyRect.height
+      const visible = wrapperRect.bottom > safeTop && wrapperRect.top < viewportBottom
+      if (!canPin || !visible) {
+        if (copy.dataset.stuck) reset(copy)
+        return
+      }
+
+      const top = Math.min(safeTop, wrapperRect.bottom - copyRect.height)
+      if (copy.dataset.stuck) {
+        copy.style.top = `${top}px`
+        copy.style.left = `${wrapperRect.right - copyRect.width - 4}px`
+        return
+      }
+
+      const placeholder = document.createElement("div")
+      placeholder.setAttribute("data-slot", "markdown-copy-button-placeholder")
+      placeholder.style.width = `${copyRect.width}px`
+      placeholder.style.height = `${copyRect.height}px`
+      copy.before(placeholder)
+      copyPlaceholders.set(copy, placeholder)
+      floatingCopyButtons.set(wrapper, copy)
+      document.body.appendChild(copy)
+      copy.classList.add("markdown-copy-button-floating")
+      copy.style.position = "fixed"
+      copy.style.top = `${top}px`
+      copy.style.left = `${wrapperRect.right - copyRect.width - 4}px`
+      copy.style.width = `${copyRect.width}px`
+      copy.dataset.stuck = "true"
+    })
+  }
+
+  const schedule = () => {
+    if (frame !== undefined) return
+    frame = requestAnimationFrame(update)
+  }
+
+  window.addEventListener("scroll", schedule, { passive: true })
+  window.addEventListener("resize", schedule)
+  scrollable?.addEventListener("scroll", schedule, { passive: true })
+  const observer =
+    typeof MutationObserver === "undefined"
+      ? undefined
+      : new MutationObserver((records) => {
+          const changedOutsidePlaceholder = records.some((record) =>
+            [...record.addedNodes, ...record.removedNodes].some(
+              (node) =>
+                !(node instanceof HTMLElement && node.getAttribute("data-slot") === "markdown-copy-button-placeholder"),
+            ),
+          )
+          if (changedOutsidePlaceholder) schedule()
+        })
+  observer?.observe(root, { childList: true, subtree: true })
+  update()
+
+  return () => {
+    window.removeEventListener("scroll", schedule)
+    window.removeEventListener("resize", schedule)
+    scrollable?.removeEventListener("scroll", schedule)
+    observer?.disconnect()
+    if (frame !== undefined) cancelAnimationFrame(frame)
+    tracked.forEach(reset)
+    tracked.clear()
   }
 }
 
@@ -572,6 +831,7 @@ export function Markdown(
   )
 
   let copyCleanup: (() => void) | undefined
+  let stickyCleanup: (() => void) | undefined
   let pathRevealCleanup: (() => void) | undefined
 
   createEffect(() => {
@@ -591,6 +851,10 @@ export function Markdown(
       copy: i18n.t("ui.message.copy"),
       copied: i18n.t("ui.message.copied"),
     }
+    const previewLabels = {
+      raw: i18n.t("ui.message.raw"),
+      markdown: i18n.t("ui.message.markdown"),
+    }
     const pathLinks = !!local.revealPath
     const nextCodeKeys = new Set(content.filter((block) => block.mode === "code").map((block) => block.key))
     activeCodeKeys.forEach((key) => {
@@ -598,7 +862,7 @@ export function Markdown(
     })
     activeCodeKeys.clear()
     nextCodeKeys.forEach((key) => activeCodeKeys.add(key))
-    content.forEach((block, index) => updateBlock(container, index, block, labels, pathLinks))
+    content.forEach((block, index) => updateBlock(container, index, block, labels, previewLabels, pathLinks))
     while (container.children.length > content.length) {
       const child = container.lastElementChild
       if (!child) break
@@ -608,11 +872,22 @@ export function Markdown(
     container
       .querySelectorAll<HTMLElement>('[data-slot="markdown-copy-button"]')
       .forEach((button) => setCopyState(button, labels, button.dataset.copied === "true"))
+    container
+      .querySelectorAll<HTMLElement>('[data-slot="markdown-preview-button"]')
+      .forEach((button) => previewButtonState.get(button)?.setLabels(previewLabels))
     if (!copyCleanup)
-      copyCleanup = setupCodeCopy(container, () => ({
-        copy: i18n.t("ui.message.copy"),
-        copied: i18n.t("ui.message.copied"),
-      }))
+      copyCleanup = setupCodeCopy(
+        container,
+        () => ({
+          copy: i18n.t("ui.message.copy"),
+          copied: i18n.t("ui.message.copied"),
+        }),
+        () => ({
+          raw: i18n.t("ui.message.raw"),
+          markdown: i18n.t("ui.message.markdown"),
+        }),
+      )
+    if (!stickyCleanup) stickyCleanup = setupStickyCodeActions(container)
     if (!pathRevealCleanup)
       pathRevealCleanup = setupPathReveal(container, {
         directory: () => local.directory,
@@ -622,6 +897,7 @@ export function Markdown(
 
   onCleanup(() => {
     if (pathRevealCleanup) pathRevealCleanup()
+    if (stickyCleanup) stickyCleanup()
     if (copyCleanup) copyCleanup()
     disposeMarkdownProjection(owner)
     activeCodeKeys.forEach(disposeCode)
@@ -680,11 +956,12 @@ function updateBlock(
   index: number,
   block: RenderedBlock,
   labels: CopyLabels,
+  previewLabels: PreviewLabels,
   pathLinks: boolean,
 ) {
   const current = container.children[index]
   if (block.mode === "code") {
-    updateCodeBlock(container, current, block, labels)
+    updateCodeBlock(container, current, block, labels, previewLabels)
     return
   }
   if (
@@ -700,7 +977,7 @@ function updateBlock(
   next.dataset.markdownHash = block.hash
   next.style.display = "contents"
   next.innerHTML = block.html
-  decorate(next, labels, pathLinks)
+  decorate(next, labels, previewLabels, pathLinks)
 
   if (!(current instanceof HTMLDivElement)) {
     container.appendChild(next)
@@ -732,6 +1009,7 @@ function updateCodeBlock(
   current: Element | undefined,
   block: Extract<RenderedBlock, { mode: "code" }>,
   labels: CopyLabels,
+  previewLabels: PreviewLabels,
 ) {
   const existing = current instanceof HTMLDivElement && current.dataset.markdownKey === block.key ? current : undefined
   const next = existing ?? document.createElement("div")
@@ -744,7 +1022,10 @@ function updateCodeBlock(
   const code = existing?.querySelector("code")
   if (code instanceof HTMLElement) {
     const wrapper = code.closest('[data-component="markdown-code"]')
-    if (wrapper instanceof HTMLElement) applyCodeMetadata(wrapper, block.language)
+    if (wrapper instanceof HTMLElement) {
+      applyCodeMetadata(wrapper, block.language)
+      ensureCodeActions(wrapper, block.language, labels, previewLabels)
+    }
     code.className = `language-${block.language}`
     const previous = renderedCodeTokens.get(next)
     const reset = shouldResetCodeTokens(previous, {
@@ -783,7 +1064,7 @@ function updateCodeBlock(
   ;[...block.stable, ...block.unstable].map(createTokenSpan).forEach((span) => codeElement.appendChild(span))
   pre.appendChild(codeElement)
   wrapper.appendChild(pre)
-  wrapper.appendChild(createCopyButton(labels))
+  ensureCodeActions(wrapper, block.language, labels, previewLabels)
   next.appendChild(wrapper)
   renderedCodeTokens.set(next, {
     language: block.language,

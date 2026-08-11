@@ -82,6 +82,7 @@ import { createPromptInputTransientState } from "./prompt-input/transient-state"
 import { showToast } from "@/utils/toast"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
+import { CacheTimerRing, cacheDurationMs, cacheExpiry } from "@/components/cache-timer-ring"
 
 export { createPromptInputHistory }
 export type { PromptInputControls, PromptInputHistory, PromptInputProps, PromptInputState, PromptInputSubmission }
@@ -253,6 +254,18 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
   const info = createMemo(() => (props.controls.session.id ? sync().session.get(props.controls.session.id) : undefined))
   const working = createMemo(() => sync().data.session_working(props.controls.session.id ?? ""))
+  const cacheDuration = createMemo(() => {
+    const model = props.controls.model.selection.current()
+    return model ? cacheDurationMs(model) : undefined
+  })
+  const cacheExpiresAt = createMemo(() => {
+    const sessionID = props.controls.session.id
+    if (!sessionID) return
+    const model = props.controls.model.selection.current()
+    if (!model) return
+    const messages = sync().data.message[sessionID] ?? []
+    return cacheExpiry(messages, model)
+  })
   const imageAttachments = createMemo(() =>
     prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
   )
@@ -1055,12 +1068,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         setRangeEdge(editorRef, range, "end", cursorPosition)
       }
 
-      if (
-        !atMatch &&
-        cursorPosition > 0 &&
-        textBeforeCursor.length > 0 &&
-        !/\s$/.test(textBeforeCursor)
-      ) {
+      if (!atMatch && cursorPosition > 0 && textBeforeCursor.length > 0 && !/\s$/.test(textBeforeCursor)) {
         const space = document.createTextNode(" ")
         range.insertNode(space)
         range.setStartAfter(space)
@@ -1587,17 +1595,31 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             />
 
             <div class="flex items-center gap-1 pointer-events-auto">
-              <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
-                <IconButton
-                  data-action="prompt-submit"
-                  type="submit"
-                  disabled={!working() && blank()}
-                  tabIndex={store.mode === "normal" ? undefined : -1}
-                  icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
-                  variant="primary"
-                  class="size-8"
-                  aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
-                />
+              <Tooltip
+                placement="top"
+                inactive={cacheExpiresAt() !== undefined || (!working() && blank())}
+                value={tip()}
+              >
+                <CacheTimerRing
+                  expiresAt={cacheExpiresAt}
+                  durationMs={cacheDuration}
+                  timeLabel={(seconds) => {
+                    const minutes = Math.floor(seconds / 60)
+                    const remainder = String(seconds % 60).padStart(2, "0")
+                    return language.t("cacheTimer.remaining", { time: `${minutes}:${remainder}` })
+                  }}
+                >
+                  <IconButton
+                    data-action="prompt-submit"
+                    type="submit"
+                    disabled={!working() && blank()}
+                    tabIndex={store.mode === "normal" ? undefined : -1}
+                    icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
+                    variant="primary"
+                    class="size-8"
+                    aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
+                  />
+                </CacheTimerRing>
               </Tooltip>
             </div>
           </div>

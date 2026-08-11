@@ -176,6 +176,7 @@ export namespace Step {
           write: Schema.Finite,
         }),
       }),
+      cacheExpiresAt: Schema.Finite.pipe(optional),
       snapshot: Schema.String.pipe(optional),
       files: Schema.Array(RelativePath).pipe(optional),
     },

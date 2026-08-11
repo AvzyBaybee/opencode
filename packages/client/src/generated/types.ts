@@ -665,6 +665,7 @@ export type SessionsContextOutput = {
         readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
         readonly finish?: string
         readonly cost?: number
+        readonly cacheExpiresAt?: number
         readonly tokens?: {
           readonly input: number
           readonly output: number
@@ -872,6 +873,7 @@ export type SessionsHistoryOutput = {
             readonly reasoning: number
             readonly cache: { readonly read: number; readonly write: number }
           }
+          readonly cacheExpiresAt?: number
           readonly snapshot?: string
           readonly files?: ReadonlyArray<string>
         }
@@ -1351,6 +1353,7 @@ export type SessionsEventsOutput =
           readonly reasoning: number
           readonly cache: { readonly read: number; readonly write: number }
         }
+        readonly cacheExpiresAt?: number
         readonly snapshot?: string
         readonly files?: ReadonlyArray<string>
       }
@@ -1785,6 +1788,7 @@ export type SessionsMessageOutput = {
         readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
         readonly finish?: string
         readonly cost?: number
+        readonly cacheExpiresAt?: number
         readonly tokens?: {
           readonly input: number
           readonly output: number
@@ -1957,6 +1961,7 @@ export type MessagesListOutput = {
         readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
         readonly finish?: string
         readonly cost?: number
+        readonly cacheExpiresAt?: number
         readonly tokens?: {
           readonly input: number
           readonly output: number

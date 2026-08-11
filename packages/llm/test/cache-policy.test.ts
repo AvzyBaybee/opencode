@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import { CacheHint, LLM, Message } from "../src"
+import { CacheHint, effectiveTtlSeconds, LLM, Message } from "../src"
 import { Auth, LLMClient } from "../src/route"
 import { AmazonBedrock } from "../src/providers"
 import * as AnthropicMessages from "../src/protocols/anthropic-messages"
@@ -29,6 +29,16 @@ const geminiModel = Gemini.route
   .model({ id: "gemini-2.5-flash" })
 
 describe("applyCachePolicy", () => {
+  test("resolves provider-specific cache TTLs", () => {
+    expect(effectiveTtlSeconds(LLM.request({ model: anthropicModel, prompt: "hi" }))).toBe(300)
+    expect(
+      effectiveTtlSeconds(
+        LLM.request({ model: anthropicModel, prompt: "hi", cache: { system: true, ttlSeconds: 3600 } }),
+      ),
+    ).toBe(3600)
+    expect(effectiveTtlSeconds(LLM.request({ model: openaiModel, prompt: "hi" }))).toBeUndefined()
+  })
+
   it.effect("undefined cache resolves to 'auto' (the recommended default)", () =>
     Effect.gen(function* () {
       const prepared = yield* LLMClient.prepare(

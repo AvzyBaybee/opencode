@@ -166,6 +166,10 @@ export function createV2SessionReducer() {
           ...item,
           finish: event.data.finish,
           cost: event.data.cost,
+          cacheExpiresAt:
+            "cacheExpiresAt" in event.data && typeof event.data.cacheExpiresAt === "number"
+              ? event.data.cacheExpiresAt
+              : undefined,
           tokens: event.data.tokens,
           snapshot:
             event.data.snapshot || event.data.files

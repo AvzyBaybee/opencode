@@ -174,11 +174,7 @@ export interface MessageProps {
 }
 
 export type SessionAction = (input: { sessionID: string; messageID: string }) => Promise<void> | void
-export type MessageEditAction = (input: {
-  sessionID: string
-  messageID: string
-  text: string
-}) => Promise<void> | void
+export type MessageEditAction = (input: { sessionID: string; messageID: string; text: string }) => Promise<void> | void
 
 export type UserActions = {
   fork?: SessionAction
@@ -231,6 +227,13 @@ function MessageActionButton(
             icon={props.icon}
             size="normal"
             variant="ghost"
+            class={
+              props.icon === "trash"
+                ? "scale-[1.1] translate-y-0.5"
+                : props.icon === "edit"
+                  ? "-translate-y-0.5"
+                  : undefined
+            }
             disabled={props.disabled}
             onMouseDown={props.onMouseDown}
             onClick={props.onClick}
@@ -247,9 +250,9 @@ function MessageActionButton(
               size="small"
               class={
                 props.icon === "trash"
-                  ? "scale-[1.05] -translate-y-0.5"
+                  ? "scale-[1.1] translate-y-0.5"
                   : props.icon === "edit"
-                    ? "translate-y-0.5"
+                    ? "-translate-y-0.5"
                     : undefined
               }
             />
@@ -1068,11 +1071,7 @@ export function AssistantMessageDisplay(props: {
                       actions={props.actions}
                       showAssistantCopyPartID={props.showAssistantCopyPartID}
                       useV2Actions={props.useV2Actions}
-                      defaultOpen={
-                        item()!.type === "reasoning"
-                          ? (props.showReasoningSummaries ?? false)
-                          : undefined
-                      }
+                      defaultOpen={item()!.type === "reasoning" ? (props.showReasoningSummaries ?? false) : undefined}
                     />
                   </Show>
                 )

@@ -7,6 +7,8 @@ import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
 import { createEffect, createMemo, on, Show } from "solid-js"
+import { useParams } from "@solidjs/router"
+import { CacheTimerRing, cacheDurationMs, sessionCacheExpiry } from "@/components/cache-timer-ring"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
@@ -48,6 +50,18 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
   const dialog = useDialog()
   const command = useCommand()
   const language = useLanguage()
+  const sync = useSync()
+  const params = useParams<{ id?: string }>()
+  const cacheDuration = createMemo(() => {
+    const model = props.controller.model.selection.current()
+    return model ? cacheDurationMs(model) : undefined
+  })
+  const cacheExpiresAt = createMemo(() => {
+    const sessionID = params.id
+    const model = props.controller.model.selection.current()
+    if (!sessionID || !model) return
+    return sessionCacheExpiry(sync().data.session_message[sessionID] ?? [], model)
+  })
 
   return (
     <div class="flex flex-col gap-3">
@@ -73,6 +87,29 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
             }
           />
         }
+        submitWrapper={(button) => (
+          <TooltipV2
+            placement="top"
+            inactive={cacheExpiresAt() !== undefined}
+            value={
+              props.controller.view.submit.stopping()
+                ? language.t("ui.promptInput.stop")
+                : language.t("ui.promptInput.send")
+            }
+          >
+            <CacheTimerRing
+              expiresAt={cacheExpiresAt}
+              durationMs={cacheDuration}
+              timeLabel={(seconds) => {
+                const minutes = Math.floor(seconds / 60)
+                const remainder = String(seconds % 60).padStart(2, "0")
+                return language.t("cacheTimer.remaining", { time: `${minutes}:${remainder}` })
+              }}
+            >
+              {button}
+            </CacheTimerRing>
+          </TooltipV2>
+        )}
       />
     </div>
   )

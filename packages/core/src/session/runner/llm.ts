@@ -5,6 +5,7 @@ import {
   LLMEvent,
   Message,
   SystemPart,
+  effectiveTtlSeconds,
   isContextOverflowFailure,
   type ProviderErrorEvent,
 } from "@opencode-ai/llm"
@@ -225,6 +226,7 @@ const layer = Layer.effect(
           providerID: ProviderV2.ID.make(model.provider),
           ...(session.model?.variant === undefined ? {} : { variant: session.model.variant }),
         },
+        cacheTtlSeconds: effectiveTtlSeconds(request),
         snapshot: startSnapshot,
       })
       const withPublication = Semaphore.makeUnsafe(1).withPermit
@@ -333,6 +335,7 @@ const layer = Layer.effect(
                 finish: stepSettlement.finish,
                 cost: 0,
                 tokens: stepSettlement.tokens,
+                cacheExpiresAt: stepSettlement.cacheExpiresAt,
                 snapshot: endSnapshot,
                 files,
               }),
