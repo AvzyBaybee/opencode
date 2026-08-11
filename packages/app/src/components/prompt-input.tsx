@@ -1595,32 +1595,28 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             />
 
             <div class="flex items-center gap-1 pointer-events-auto">
-              <Tooltip
-                placement="top"
-                inactive={cacheExpiresAt() !== undefined || (!working() && blank())}
-                value={tip()}
+              <CacheTimerRing
+                expiresAt={cacheExpiresAt}
+                durationMs={cacheDuration}
+                inactive={!working() && blank()}
+                actionLabel={tip}
+                timeLabel={(seconds) => {
+                  const minutes = Math.floor(seconds / 60)
+                  const remainder = String(seconds % 60).padStart(2, "0")
+                  return language.t("cacheTimer.remaining", { time: `${minutes}:${remainder}` })
+                }}
               >
-                <CacheTimerRing
-                  expiresAt={cacheExpiresAt}
-                  durationMs={cacheDuration}
-                  timeLabel={(seconds) => {
-                    const minutes = Math.floor(seconds / 60)
-                    const remainder = String(seconds % 60).padStart(2, "0")
-                    return language.t("cacheTimer.remaining", { time: `${minutes}:${remainder}` })
-                  }}
-                >
-                  <IconButton
-                    data-action="prompt-submit"
-                    type="submit"
-                    disabled={!working() && blank()}
-                    tabIndex={store.mode === "normal" ? undefined : -1}
-                    icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
-                    variant="primary"
-                    class="size-8"
-                    aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
-                  />
-                </CacheTimerRing>
-              </Tooltip>
+                <IconButton
+                  data-action="prompt-submit"
+                  type="submit"
+                  disabled={!working() && blank()}
+                  tabIndex={store.mode === "normal" ? undefined : -1}
+                  icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
+                  variant="primary"
+                  class="size-8"
+                  aria-label={stopping() ? language.t("prompt.action.stop") : language.t("prompt.action.send")}
+                />
+              </CacheTimerRing>
             </div>
           </div>
 

@@ -333,6 +333,54 @@
   border-bottom: 1px solid var(--border-weak-base, var(--v2-border-border-weak));
 }
 
+.ava-file-preview-host {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.ava-file-preview-toggle {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 8px;
+  z-index: 2;
+  display: flex;
+}
+
+.ava-file-preview-toggle .markdown-preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--v2-background-bg-button-neutral);
+  box-shadow: var(--v2-elevation-button-neutral);
+  color: var(--v2-text-text-base);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ava-file-preview-toggle .markdown-preview-toggle:hover {
+  background-image: linear-gradient(
+    90deg,
+    var(--v2-overlay-simple-overlay-hover) 0%,
+    var(--v2-overlay-simple-overlay-hover) 100%
+  );
+}
+
+.ava-file-preview-markdown {
+  padding: 28px 20px 16px;
+}
+
 .ava-file-preview-scroll {
   min-height: 0;
   flex: 1;

@@ -42,12 +42,24 @@ const BINARY_EXTENSIONS = new Set([
   "img",
 ])
 
-export function isTextFilePath(path: string) {
+const MARKDOWN_EXTENSIONS = new Set(["md", "markdown", "mdx"])
+
+function fileExtension(path: string) {
   const base = path.split(/[/\\]/).pop() ?? path
   const dot = base.lastIndexOf(".")
-  if (dot <= 0 || dot === base.length - 1) return true
-  const ext = base.slice(dot + 1).toLowerCase()
+  if (dot <= 0 || dot === base.length - 1) return
+  return base.slice(dot + 1).toLowerCase()
+}
+
+export function isTextFilePath(path: string) {
+  const ext = fileExtension(path)
+  if (!ext) return true
   return !BINARY_EXTENSIONS.has(ext)
+}
+
+export function isMarkdownFilePath(path: string) {
+  const ext = fileExtension(path)
+  return !!ext && MARKDOWN_EXTENSIONS.has(ext)
 }
 
 export function folderBasename(path: string) {

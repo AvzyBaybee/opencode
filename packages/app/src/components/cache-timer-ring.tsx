@@ -1,5 +1,5 @@
 import { Show, createEffect, createSignal, onCleanup, type Accessor, type JSX } from "solid-js"
-import { Portal } from "solid-js/web"
+import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import type { Message } from "@opencode-ai/sdk/v2/client"
 
 export function cacheDurationMs(model: { provider: { id: string }; id: string }) {
@@ -51,12 +51,12 @@ export function sessionCacheExpiry(
 export function CacheTimerRing(props: {
   expiresAt: Accessor<number | undefined>
   durationMs: Accessor<number | undefined>
+  actionLabel: Accessor<JSX.Element>
   timeLabel: (remainingSeconds: number) => string
+  inactive?: boolean
   children: JSX.Element
 }) {
   const [now, setNow] = createSignal(Date.now())
-  const [point, setPoint] = createSignal({ x: 0, y: 0 })
-  const [hovered, setHovered] = createSignal(false)
 
   createEffect(() => {
     if (props.expiresAt() === undefined) return
@@ -66,7 +66,7 @@ export function CacheTimerRing(props: {
       setNow(current)
       const expiresAt = props.expiresAt()
       if (expiresAt !== undefined && current >= expiresAt) clearInterval(interval)
-    }, 1000)
+    }, 100)
     onCleanup(() => clearInterval(interval))
   })
 
@@ -77,56 +77,52 @@ export function CacheTimerRing(props: {
     if (expiresAt === undefined || expiresAt <= now()) return 0
     return Math.min(1, Math.max(0, (expiresAt - now()) / Math.max(1, props.durationMs() ?? 1)))
   }
-
-  const showTooltip = (event: MouseEvent) => {
-    if (props.expiresAt() === undefined || remaining() <= 0) return
-    setPoint({ x: event.clientX + 12, y: event.clientY + 14 })
-    setHovered(true)
-  }
-
-  const moveTooltip = (event: MouseEvent) => {
-    if (!hovered()) return
-    setPoint({ x: event.clientX + 12, y: event.clientY + 14 })
-  }
+  const active = () => progress() > 0
 
   return (
-    <span
-      class="relative inline-flex"
-      onMouseEnter={showTooltip}
-      onMouseMove={moveTooltip}
-      onMouseLeave={() => setHovered(false)}
+    <TooltipV2
+      placement="top"
+      inactive={!!props.inactive && !active()}
+      value={
+        <>
+          {props.actionLabel()}
+          <Show when={active()}>
+            <span style={{ color: "var(--v2-text-text-muted)" }}>·</span>
+            <span style={{ color: "var(--v2-text-text-muted)", "font-variant-numeric": "tabular-nums" }}>
+              {props.timeLabel(remainingSeconds())}
+            </span>
+          </Show>
+        </>
+      }
     >
-      {props.children}
-      <Show when={progress() > 0}>
-        <svg
-          class="pointer-events-none absolute inset-0 h-full w-full"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <rect
-            x="2"
-            y="2"
-            width="96"
-            height="96"
-            rx="12"
-            fill="none"
-            stroke="var(--syntax-info)"
-            stroke-width="3"
-            pathLength="100"
-            stroke-dasharray="100"
-            stroke-dashoffset={100 - progress() * 100}
-            transform="rotate(-90 50 50)"
-          />
-        </svg>
-      </Show>
-      <Show when={hovered() && progress() > 0}>
-        <Portal>
-          <div class="ava-cursor-tooltip" style={{ left: `${point().x}px`, top: `${point().y}px` }}>
-            {props.timeLabel(remainingSeconds())}
-          </div>
-        </Portal>
-      </Show>
-    </span>
+      <span class="relative inline-flex">
+        {props.children}
+        <Show when={active()}>
+          <svg
+            class="pointer-events-none absolute inset-[1px] h-[calc(100%-2px)] w-[calc(100%-2px)]"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="2"
+              y="2"
+              width="96"
+              height="96"
+              rx="20"
+              fill="none"
+              stroke="color-mix(in srgb, var(--text-strong, var(--v2-text-text-base)) 78%, transparent)"
+              stroke-width="2.25"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              pathLength="100"
+              stroke-dasharray="100"
+              stroke-dashoffset={100 - progress() * 100}
+              transform="rotate(-90 50 50)"
+            />
+          </svg>
+        </Show>
+      </span>
+    </TooltipV2>
   )
 }

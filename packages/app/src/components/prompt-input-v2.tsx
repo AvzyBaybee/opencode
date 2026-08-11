@@ -88,27 +88,23 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
           />
         }
         submitWrapper={(button) => (
-          <TooltipV2
-            placement="top"
-            inactive={cacheExpiresAt() !== undefined}
-            value={
+          <CacheTimerRing
+            expiresAt={cacheExpiresAt}
+            durationMs={cacheDuration}
+            inactive={!props.controller.view.submit.stopping() && !props.controller.canSubmit()}
+            actionLabel={() =>
               props.controller.view.submit.stopping()
                 ? language.t("ui.promptInput.stop")
                 : language.t("ui.promptInput.send")
             }
+            timeLabel={(seconds) => {
+              const minutes = Math.floor(seconds / 60)
+              const remainder = String(seconds % 60).padStart(2, "0")
+              return language.t("cacheTimer.remaining", { time: `${minutes}:${remainder}` })
+            }}
           >
-            <CacheTimerRing
-              expiresAt={cacheExpiresAt}
-              durationMs={cacheDuration}
-              timeLabel={(seconds) => {
-                const minutes = Math.floor(seconds / 60)
-                const remainder = String(seconds % 60).padStart(2, "0")
-                return language.t("cacheTimer.remaining", { time: `${minutes}:${remainder}` })
-              }}
-            >
-              {button}
-            </CacheTimerRing>
-          </TooltipV2>
+            {button}
+          </CacheTimerRing>
         )}
       />
     </div>

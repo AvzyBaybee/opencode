@@ -141,7 +141,7 @@ export function AvaBrowseFolderPanel(props: {
     showToast({
       variant: "success",
       title: language.t("ava.sidePanel.copySuccess.title"),
-      description: language.t("ava.sidePanel.copySuccess.description", { count: String(paths.length) }),
+      description: language.plural("ava.sidePanel.copySuccess.description", paths.length),
     })
   }
 
