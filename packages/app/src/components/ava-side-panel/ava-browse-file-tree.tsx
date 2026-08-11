@@ -43,7 +43,15 @@ function BrowseTreeRow(props: {
             event.dataTransfer?.setData("text/plain", `file:${entry().path}`)
             event.dataTransfer?.setData("text/uri-list", pathToFileUrl(entry().path))
             if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
-            withFileDragImage(event)
+            withFileDragImage(event, entry().name)
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "none"
+          }}
+          onDrop={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
           }}
           onClick={() => {
             if (entry().type === "directory") {

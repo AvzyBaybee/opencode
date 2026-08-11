@@ -244,8 +244,14 @@ function MessageActionButton(
           icon={
             <IconV2
               name={icon()}
-              size={props.icon === "trash" ? "normal" : "small"}
-              class={props.icon === "trash" ? "scale-[1.12]" : undefined}
+              size="small"
+              class={
+                props.icon === "trash"
+                  ? "scale-[1.05] -translate-y-0.5"
+                  : props.icon === "edit"
+                    ? "translate-y-0.5"
+                    : undefined
+              }
             />
           }
           size="normal"

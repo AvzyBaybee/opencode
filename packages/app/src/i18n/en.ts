@@ -908,6 +908,7 @@ export const dict = {
   "ava.sidePanel.searchFiles": "Search Files...",
   "ava.sidePanel.projectFolder": "Project folder",
   "ava.sidePanel.openFolder": "Open folder",
+  "ava.sidePanel.openNewFolder": "Open new folder",
   "ava.sidePanel.copyToClipboard": "Copy to clipboard",
   "ava.sidePanel.copySuccess.title": "Copied to clipboard",
   "ava.sidePanel.copySuccess.description": "Copied {{count}} file(s) to the clipboard.",

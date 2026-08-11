@@ -33,7 +33,7 @@ export function AvaProjectFilePreview(props: { path?: string }) {
       when={props.path}
       fallback={
         <SessionFilePanelV2Empty>
-          <div class="flex flex-col items-center gap-3 text-center text-text-weak">
+          <div class="ava-file-preview-empty flex flex-col items-center gap-3 text-center text-text-weak">
             <Icon name="file-tree" size="large" />
             <div class="text-14-medium text-text-strong">{language.t("ava.sidePanel.selectFile")}</div>
           </div>
@@ -86,7 +86,7 @@ export function AvaBrowseFilePreview(props: { path?: string }) {
       when={props.path}
       fallback={
         <SessionFilePanelV2Empty>
-          <div class="flex flex-col items-center gap-3 text-center text-text-weak">
+          <div class="ava-file-preview-empty flex flex-col items-center gap-3 text-center text-text-weak">
             <Icon name="file-tree" size="large" />
             <div class="text-14-medium text-text-strong">{language.t("ava.sidePanel.selectFile")}</div>
           </div>

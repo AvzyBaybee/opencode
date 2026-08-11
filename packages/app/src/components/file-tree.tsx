@@ -85,26 +85,59 @@ export const visibleKind = (node: FileNode, kinds?: ReadonlyMap<string, Kind>, m
   return kind
 }
 
-const buildDragImage = (target: HTMLElement) => {
-  const icon = target.querySelector('[data-component="file-icon"]') ?? target.querySelector("svg")
-  const text = target.querySelector("span")
-  if (!icon || !text) return
+const DRAG_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3.5 1.5H9.5L12.5 4.5V14.5H3.5V1.5Z" stroke="#6B9EFF" stroke-width="1.25"/><path d="M9.5 1.5V4.5H12.5" stroke="#6B9EFF" stroke-width="1.25"/><path d="M5.5 7.5H10.5M5.5 9.5H10.5M5.5 11.5H8.5" stroke="#6B9EFF" stroke-width="1.25" stroke-linecap="round"/></svg>`
+
+const buildDragImage = (target: HTMLElement, label?: string) => {
+  const row = target.closest('[data-slot="file-tree-v2-row"]') ?? target
+  const name =
+    label?.trim() ||
+    row.querySelector("bdi")?.textContent?.trim() ||
+    row.getAttribute("data-path")?.split(/[/\\]/).pop() ||
+    ""
+  if (!name) return
 
   const image = document.createElement("div")
-  image.className =
-    "flex items-center gap-x-2 px-2 py-1 bg-surface-raised-base rounded-md border border-border-base text-12-regular text-text-strong"
-  image.style.position = "absolute"
-  image.style.top = "-1000px"
-  image.innerHTML = (icon as SVGElement).outerHTML + (text as HTMLSpanElement).outerHTML
+  image.setAttribute("data-ava-file-drag-image", "")
+  image.style.cssText = [
+    "position:absolute",
+    "top:-1000px",
+    "left:0",
+    "display:flex",
+    "align-items:center",
+    "gap:8px",
+    "padding:6px 10px",
+    "border-radius:8px",
+    "border:1px solid color-mix(in srgb, #ffffff 14%, transparent)",
+    "background:#2a2a2a",
+    "color:#e8e8e8",
+    "font-size:12px",
+    "line-height:1.2",
+    "font-family:ui-sans-serif,system-ui,sans-serif",
+    "box-shadow:0 8px 20px color-mix(in srgb, #000 35%, transparent)",
+    "pointer-events:none",
+    "white-space:nowrap",
+    "max-width:280px",
+    "z-index:2147483647",
+  ].join(";")
+  image.innerHTML = `${DRAG_ICON}<span style="overflow:hidden;text-overflow:ellipsis;max-width:240px"></span>`
+  const text = image.querySelector("span")
+  if (text) text.textContent = name
   return image
 }
 
-export const withFileDragImage = (event: DragEvent) => {
-  const image = buildDragImage(event.currentTarget as HTMLElement)
-  if (!image) return
+export const withFileDragImage = (event: DragEvent, label?: string) => {
+  const image = buildDragImage(event.currentTarget as HTMLElement, label)
+  if (!image || !event.dataTransfer) return
   document.body.appendChild(image)
-  event.dataTransfer?.setDragImage(image, 0, 12)
-  setTimeout(() => document.body.removeChild(image), 0)
+  event.dataTransfer.setDragImage(image, 12, 12)
+  const cleanup = () => {
+    image.remove()
+    window.removeEventListener("dragend", cleanup)
+  }
+  window.addEventListener("dragend", cleanup, { once: true })
+  setTimeout(() => {
+    if (image.isConnected) image.remove()
+  }, 30_000)
 }
 
 const FileTreeNode = (

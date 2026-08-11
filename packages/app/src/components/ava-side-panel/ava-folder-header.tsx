@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { TruncatedCursorTooltip, isTextTruncated } from "@/components/truncated-cursor-tooltip"
 import { Icon } from "@opencode-ai/ui/icon"
-import { IconButton } from "@opencode-ai/ui/icon-button"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useLanguage } from "@/context/language"
 import {
   AVA_PROJECT_FOLDER_TAB,
@@ -51,8 +51,8 @@ export function AvaFolderHeader(props: {
     return directoryFromBrowseTab(active()) ?? props.tabs.projectDirectory()
   })
   const name = createMemo(() => folderBasename(activeDirectory()))
-  const others = createMemo(() => props.tabs.tabs().filter((tab) => tab !== active()))
-  const hasOthers = createMemo(() => others().length > 0)
+  const menuTabs = createMemo(() => props.tabs.tabs())
+  const hasMenu = createMemo(() => menuTabs().length > 1)
   const tooltipText = createMemo(() => (isProject() ? language.t("ava.sidePanel.projectFolder") : activeDirectory()))
 
   const labelFor = (tab: string) => {
@@ -109,57 +109,58 @@ export function AvaFolderHeader(props: {
               type="button"
               class="ava-folder-name-button"
               data-project={isProject() ? "" : undefined}
-              aria-expanded={hasOthers() ? open() : undefined}
-              aria-haspopup={hasOthers() ? "menu" : undefined}
+              aria-expanded={hasMenu() ? open() : undefined}
+              aria-haspopup={hasMenu() ? "menu" : undefined}
               onMouseEnter={handlers.onMouseEnter}
               onMouseLeave={handlers.onMouseLeave}
               onMouseMove={handlers.onMouseMove}
               onClick={() => {
-                if (!hasOthers()) return
+                if (!hasMenu()) return
                 setOpen((value) => !value)
               }}
             >
-              <span class="ava-folder-name-chevron" data-visible={hasOthers() ? "" : undefined} aria-hidden="true">
+              <span class="ava-folder-name-chevron" data-visible={hasMenu() ? "" : undefined} aria-hidden="true">
                 <Icon name="chevron-down" size="small" />
               </span>
               <span class="ava-folder-name-text" ref={setTextEl}>
                 {name()}
               </span>
-              <Show when={!isProject()}>
-                <span
-                  class="ava-folder-name-close"
-                  role="button"
-                  tabindex="0"
-                  aria-label={language.t("common.closeTab")}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    props.tabs.close(active())
-                    closeMenu()
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return
-                    event.preventDefault()
-                    event.stopPropagation()
-                    props.tabs.close(active())
-                    closeMenu()
-                  }}
-                >
-                  <Icon name="close-small" size="small" />
-                </span>
+              <Show when={props.canOpenFolder}>
+                <Tooltip value={language.t("ava.sidePanel.openNewFolder")} placement="bottom" gutter={6}>
+                    <span
+                      class="ava-folder-name-add"
+                      role="button"
+                      tabindex="0"
+                      aria-label={language.t("ava.sidePanel.openNewFolder")}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        props.onOpenFolder()
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return
+                        event.preventDefault()
+                        event.stopPropagation()
+                        props.onOpenFolder()
+                      }}
+                    >
+                      <Icon name="plus-small" size="small" />
+                    </span>
+                </Tooltip>
               </Show>
             </button>
           )}
         </TruncatedCursorTooltip>
-        <Show when={open() && hasOthers()}>
+        <Show when={open() && hasMenu()}>
           <div class="ava-folder-dropdown" role="menu">
-            <For each={others()}>
+            <For each={menuTabs()}>
               {(tab) => (
                 <button
                   type="button"
                   role="menuitem"
                   class="ava-folder-dropdown-item"
                   data-project={tab === AVA_PROJECT_FOLDER_TAB ? "" : undefined}
+                  data-active={tab === active() ? "" : undefined}
                   onClick={() => {
                     props.tabs.setActive(tab)
                     closeMenu()
@@ -187,20 +188,6 @@ export function AvaFolderHeader(props: {
           </div>
         </Show>
       </div>
-      <Show when={props.canOpenFolder}>
-        <div class="ava-folder-header-add">
-          <IconButton
-            icon="plus-small"
-            variant="ghost"
-            class="h-6 w-6"
-            onClick={(event) => {
-              event.stopPropagation()
-              props.onOpenFolder()
-            }}
-            aria-label={language.t("ava.sidePanel.openFolder")}
-          />
-        </div>
-      </Show>
     </div>
   )
 }

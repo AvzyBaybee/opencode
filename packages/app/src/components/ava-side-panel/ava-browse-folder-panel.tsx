@@ -44,7 +44,15 @@ function BrowseSearchRow(props: {
             event.dataTransfer?.setData("text/plain", `file:${props.path}`)
             event.dataTransfer?.setData("text/uri-list", pathToFileUrl(props.path))
             if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
-            withFileDragImage(event)
+            withFileDragImage(event, props.label)
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "none"
+          }}
+          onDrop={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
           }}
           onClick={props.onClick}
           onContextMenu={props.onContextMenu}

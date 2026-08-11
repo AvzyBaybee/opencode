@@ -31,7 +31,7 @@ const icons = {
   },
   console: {
     viewBox: "0 0 20 20",
-    body: `<path d="M3.75 5.4165L8.33333 9.99984L3.75 14.5832M10.4167 14.5832H16.25" stroke="currentColor" stroke-linecap="square"/>`,
+    body: `<path d="M3.75 5.4165L8.33333 9.99984L3.75 14.5832M10.4167 14.5832H16.25" stroke="currentColor" stroke-width="1.25" stroke-linecap="square"/>`,
   },
   "console-active": {
     viewBox: "0 0 20 20",

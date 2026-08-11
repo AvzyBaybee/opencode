@@ -567,7 +567,7 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
             aria-label={props.state.terminalLabel}
             aria-expanded={props.state.terminalOpened}
             aria-controls="terminal-panel"
-            icon={<IconV2 name={props.state.terminalOpened ? "console-active" : "console"} />}
+            icon={<IconV2 name="console" />}
           />
         </TooltipV2>
       </Show>

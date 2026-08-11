@@ -1045,7 +1045,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       const textBeforeCursor = rawText.substring(0, cursorPosition)
       const atMatch = textBeforeCursor.match(/@(\S*)$/)
       const pill = createPill(part)
-      const gap = document.createTextNode(" ")
 
       if (atMatch) {
         const start = atMatch.index ?? cursorPosition - atMatch[0].length
@@ -1054,9 +1053,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       }
 
       range.deleteContents()
-      range.insertNode(gap)
       range.insertNode(pill)
-      range.setStartAfter(gap)
+      range.setStartAfter(pill)
       range.collapse(true)
       selection.removeAllRanges()
       selection.addRange(range)
@@ -1461,6 +1459,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       />
       <DockShellForm
         data-dock-border-underlay="legacy"
+        data-ava-prompt-dropzone=""
         onSubmit={handleSubmit}
         classList={{
           "group/prompt-input": true,

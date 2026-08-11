@@ -6,7 +6,6 @@ import {
   createMemo,
   createSignal,
   For,
-  onCleanup,
   Show,
   splitProps,
   type ComponentProps,
@@ -26,8 +25,8 @@ import {
   type FileTreeV2Node,
 } from "@/components/file-tree-v2-model"
 import { virtualScrollElement } from "@/components/virtual-scroll-element"
-import { stickyVirtualPinned, stickyVirtualY } from "@/components/sticky-virtual-row"
 import { TruncatedCursorTooltip, isTextTruncated } from "@/components/truncated-cursor-tooltip"
+import { useStickyScrollport } from "@/components/use-sticky-scrollport"
 
 export type { Kind } from "@/components/file-tree"
 
@@ -123,7 +122,16 @@ const FileTreeNodeV2 = (
         event.dataTransfer?.setData("text/plain", `file:${local.node.path}`)
         event.dataTransfer?.setData("text/uri-list", pathToFileUrl(local.node.path))
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
-        withFileDragImage(event)
+        withFileDragImage(event, local.node.name)
+      }}
+      onDragOver={(event: DragEvent) => {
+        // Keep file-list drops from falling through to the chat prompt.
+        event.preventDefault()
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "none"
+      }}
+      onDrop={(event: DragEvent) => {
+        event.preventDefault()
+        event.stopPropagation()
       }}
       {...rest}
     >
@@ -179,8 +187,10 @@ export default function FileTreeV2(props: {
   })
   const [root, setRoot] = createSignal<HTMLDivElement>()
   const [focused, setFocused] = createSignal<string>()
-  const [scrollTop, setScrollTop] = createSignal(0)
-  const [viewportHeight, setViewportHeight] = createSignal(0)
+  const sticky = useStickyScrollport({
+    enabled: () => !!props.stickyActive,
+    root,
+  })
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     get count() {
       return rows().length
@@ -196,7 +206,7 @@ export default function FileTreeV2(props: {
     },
     rangeExtractor: (range) => {
       const indexes = defaultRangeExtractor(range)
-      const path = focused() || (props.stickyActive ? active() : undefined)
+      const path = props.stickyActive ? active() || focused() : focused()
       const index = path ? rows().findIndex((row) => row.node.path === path) : -1
       if (index < 0 || indexes.includes(index)) return indexes
       return [...indexes, index].sort((a, b) => a - b)
@@ -206,24 +216,6 @@ export default function FileTreeV2(props: {
   createEffect(() => {
     if (!live()) return
     void file.tree.list("")
-  })
-
-  createEffect(() => {
-    if (!props.stickyActive) return
-    const scroll = virtualScrollElement(root())
-    if (!scroll) return
-    const sync = () => {
-      setScrollTop(scroll.scrollTop)
-      setViewportHeight(scroll.clientHeight)
-    }
-    sync()
-    scroll.addEventListener("scroll", sync, { passive: true })
-    const observer = new ResizeObserver(sync)
-    observer.observe(scroll)
-    onCleanup(() => {
-      scroll.removeEventListener("scroll", sync)
-      observer.disconnect()
-    })
   })
 
   // Only scroll when the active path changes (or first appears in the tree).
@@ -269,17 +261,6 @@ export default function FileTreeV2(props: {
   )
   const virtualRowKeys = createMemo(() => virtualizer.getVirtualItems().map((item) => item.key))
 
-  const rowTransform = (path: string, start: number, size: number) => {
-    if (!props.stickyActive || path !== active()) return { y: start, pinned: undefined as undefined }
-    const y = stickyVirtualY({
-      start,
-      size,
-      scrollTop: scrollTop(),
-      viewportHeight: viewportHeight(),
-    })
-    return { y, pinned: stickyVirtualPinned(start, y) }
-  }
-
   return (
     <div
       ref={setRoot}
@@ -294,7 +275,7 @@ export default function FileTreeV2(props: {
             {(item) => (
               <Show when={rowByKey().get(key as string)}>
                 {(row) => {
-                  const placed = () => rowTransform(row().node.path, item().start, item().size)
+                  const placed = () => sticky.place(row().node.path, active(), item().start, item().size)
                   return (
                     <div
                       data-ava-sticky-active={placed().pinned}
@@ -305,7 +286,8 @@ export default function FileTreeV2(props: {
                         width: "100%",
                         height: `${item().size}px`,
                         transform: `translateY(${placed().y}px)`,
-                        "z-index": placed().pinned ? "4" : undefined,
+                        "z-index":
+                          placed().pinned === "bottom" ? "12" : placed().pinned ? "11" : "auto",
                       }}
                     >
                       <Show

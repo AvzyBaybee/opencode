@@ -1,11 +1,11 @@
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import "@opencode-ai/ui/v2/file-tree-v2.css"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { kindChange, kindLabel, type Kind } from "@/components/file-tree-v2"
 import { pathToFileUrl, withFileDragImage } from "@/components/file-tree"
-import { stickyVirtualPinned, stickyVirtualY } from "@/components/sticky-virtual-row"
 import { TruncatedCursorTooltip, isTextTruncated } from "@/components/truncated-cursor-tooltip"
+import { useStickyScrollport } from "@/components/use-sticky-scrollport"
 import { normalizePath } from "@/pages/session/v2/review-diff-kinds"
 import { createVirtualizer, defaultRangeExtractor } from "@tanstack/solid-virtual"
 import { virtualScrollElement } from "@/components/virtual-scroll-element"
@@ -76,7 +76,15 @@ function SessionFileListRow(props: {
             event.dataTransfer?.setData("text/plain", `file:${props.path}`)
             event.dataTransfer?.setData("text/uri-list", pathToFileUrl(props.path))
             if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
-            withFileDragImage(event)
+            withFileDragImage(event, filename())
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "none"
+          }}
+          onDrop={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
           }}
           onFocus={props.onFocus}
           onBlur={props.onBlur}
@@ -136,8 +144,10 @@ export function SessionFileListV2(props: {
   const stickyKey = () => active() || highlighted()
   const [root, setRoot] = createSignal<HTMLDivElement>()
   const [focused, setFocused] = createSignal<string>()
-  const [scrollTop, setScrollTop] = createSignal(0)
-  const [viewportHeight, setViewportHeight] = createSignal(0)
+  const sticky = useStickyScrollport({
+    enabled: () => !!props.stickyActive,
+    root,
+  })
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     get count() {
       return props.files.length
@@ -153,29 +163,11 @@ export function SessionFileListV2(props: {
     },
     rangeExtractor: (range) => {
       const indexes = defaultRangeExtractor(range)
-      const path = focused() || (props.stickyActive ? stickyKey() : undefined)
-      const index = path ? props.files.indexOf(path) : -1
+      const path = props.stickyActive ? stickyKey() || focused() : focused()
+      const index = path ? normalized().indexOf(normalizePath(path)) : -1
       if (index < 0 || indexes.includes(index)) return indexes
       return [...indexes, index].sort((a, b) => a - b)
     },
-  })
-
-  createEffect(() => {
-    if (!props.stickyActive) return
-    const scroll = virtualScrollElement(root())
-    if (!scroll) return
-    const sync = () => {
-      setScrollTop(scroll.scrollTop)
-      setViewportHeight(scroll.clientHeight)
-    }
-    sync()
-    scroll.addEventListener("scroll", sync, { passive: true })
-    const observer = new ResizeObserver(sync)
-    observer.observe(scroll)
-    onCleanup(() => {
-      scroll.removeEventListener("scroll", sync)
-      observer.disconnect()
-    })
   })
 
   createEffect(() => {
@@ -191,19 +183,6 @@ export function SessionFileListV2(props: {
   )
   const virtualRowKeys = createMemo(() => virtualizer.getVirtualItems().map((item) => item.key))
   const draggable = () => props.draggable ?? true
-
-  const rowTransform = (path: string, start: number, size: number) => {
-    if (!props.stickyActive || normalizePath(path) !== stickyKey()) {
-      return { y: start, pinned: undefined as undefined }
-    }
-    const y = stickyVirtualY({
-      start,
-      size,
-      scrollTop: scrollTop(),
-      viewportHeight: viewportHeight(),
-    })
-    return { y, pinned: stickyVirtualPinned(start, y) }
-  }
 
   return (
     <div
@@ -224,7 +203,7 @@ export function SessionFileListV2(props: {
           return (
             <Show when={virtualItemByKey().get(key)}>
               {(item) => {
-                const placed = () => rowTransform(path, item().start, item().size)
+                const placed = () => sticky.place(value, stickyKey() || undefined, item().start, item().size)
                 return (
                   <div
                     data-ava-sticky-active={placed().pinned}
@@ -235,7 +214,8 @@ export function SessionFileListV2(props: {
                       width: "100%",
                       height: `${item().size}px`,
                       transform: `translateY(${placed().y}px)`,
-                      "z-index": placed().pinned ? "4" : undefined,
+                      "z-index":
+                        placed().pinned === "bottom" ? "12" : placed().pinned ? "11" : "auto",
                     }}
                   >
                     <SessionFileListRow
