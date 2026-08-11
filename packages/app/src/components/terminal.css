@@ -1,0 +1,6 @@
+/* ghostty-web keeps its input textarea at 0,0. On Windows the native caret
+   still paints there even with opacity: 0 and clip-path, so hide it explicitly. */
+[data-component="terminal"] textarea {
+  caret-color: transparent;
+  color: transparent;
+}

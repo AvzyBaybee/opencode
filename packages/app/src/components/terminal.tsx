@@ -18,6 +18,7 @@ import type { LocalPTY } from "@/context/terminal"
 import { disposeIfDisposable, getHoveredLinkText, setOptionIfSupported } from "@/utils/runtime-adapters"
 import { terminalWriter } from "@/utils/terminal-writer"
 import { terminalWebSocketURL } from "@/utils/terminal-websocket-url"
+import "./terminal.css"
 
 const TOGGLE_TERMINAL_ID = "terminal.toggle"
 const DEFAULT_TOGGLE_TERMINAL_KEYBIND = "ctrl+`"
