@@ -897,8 +897,21 @@ export const dict = {
   "settings.tab.ava": "Ava's Settings",
   "settings.ava.row.uiBaseColor.title": "UI base color",
   "settings.ava.row.uiBaseColor.description":
-    "Tint backgrounds, surfaces, buttons, and borders while keeping text, diff colors, and accents unchanged.",
+    "Tint backgrounds, surfaces, buttons, and borders from one color. Offset each layer with hue, saturation, and brightness.",
   "settings.ava.row.uiBaseColor.reset": "Reset",
+  "settings.ava.row.layer.frame.title": "Frame",
+  "settings.ava.row.layer.frame.description":
+    "Title bar, window edge, and the darkest chrome behind tabs and window controls.",
+  "settings.ava.row.layer.panels.title": "Panels",
+  "settings.ava.row.layer.panels.description": "Session, sidebar, and other main panel backgrounds.",
+  "settings.ava.row.layer.raised.title": "Raised",
+  "settings.ava.row.layer.raised.description": "Cards, buttons, and other surfaces that sit above panels.",
+  "settings.ava.row.layer.wells.title": "Wells",
+  "settings.ava.row.layer.wells.description":
+    "Markdown code blocks and the terminal, separately from the rest of the UI.",
+  "settings.ava.row.hsb.hue": "Hue",
+  "settings.ava.row.hsb.saturation": "Saturation",
+  "settings.ava.row.hsb.brightness": "Brightness",
   "settings.ava.row.fileHeaders.title": "Include file headers on read",
   "settings.ava.row.fileHeaders.description":
     "Give the AI SYNOPSIS and RULES headers from the top of a file when reading a later section, once per file per user turn.",
@@ -910,6 +923,7 @@ export const dict = {
   "ava.sidePanel.projectFolder": "Project folder",
   "ava.sidePanel.openFolder": "Open folder",
   "ava.sidePanel.openNewFolder": "Open new folder",
+  "ava.sidePanel.closeFolder": "Close folder",
   "ava.sidePanel.copyToClipboard": "Copy to clipboard",
   "ava.sidePanel.copySuccess.title": "Copied to clipboard",
   "ava.sidePanel.copySuccess.description": "Copied {{count}} file(s) to the clipboard.",

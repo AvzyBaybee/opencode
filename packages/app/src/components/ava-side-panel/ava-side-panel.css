@@ -136,7 +136,8 @@
   cursor: default;
 }
 
-.ava-folder-name-button[data-project] {
+.ava-folder-name-button[data-project],
+.ava-folder-dropdown-item[data-project] {
   color: color-mix(in srgb, var(--text-strong, #e8e8e8) 68%, var(--text-interactive-base, #6b8cff) 32%);
   font-weight: 600;
   background: color-mix(
@@ -149,6 +150,15 @@
 .ava-folder-name-button:hover,
 .ava-folder-dropdown-item:hover {
   background: color-mix(in srgb, #ffffff 0%, var(--surface-raised-base, var(--v2-background-bg-strong, #2a2a2a)));
+}
+
+.ava-folder-name-button[data-project]:hover,
+.ava-folder-dropdown-item[data-project]:hover {
+  background: color-mix(
+    in srgb,
+    var(--surface-raised-base, var(--v2-background-bg-strong, #2a2a2a)) 70%,
+    var(--text-interactive-base, #6b8cff) 14%
+  );
 }
 
 .ava-folder-name-button[aria-haspopup="menu"] {
@@ -310,11 +320,6 @@
   box-sizing: border-box;
   cursor: pointer;
   transition: background 120ms ease;
-}
-
-.ava-folder-dropdown-item[data-project] {
-  color: color-mix(in srgb, var(--text-strong, #e8e8e8) 68%, var(--text-interactive-base, #6b8cff) 32%);
-  font-weight: 600;
 }
 
 .ava-side-panel-copy-slot {

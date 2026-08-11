@@ -8,6 +8,8 @@ import { showToast } from "@/utils/toast"
 import type { FitAddon, Ghostty, Terminal as Term } from "ghostty-web"
 import { type ComponentProps, createEffect, createMemo, onCleanup, onMount, splitProps } from "solid-js"
 import { SerializeAddon } from "@/addons/serialize"
+import { useAvaUiBaseColorStore } from "@/components/ava-ui-base-color-store"
+import { shiftAvaHsb } from "@/components/ava-ui-surface-adjust"
 import { matchKeybind, parseKeybind } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
@@ -177,6 +179,7 @@ export const Terminal = (props: TerminalProps) => {
   const settings = useSettings()
   const theme = useTheme()
   const language = useLanguage()
+  const surfaces = useAvaUiBaseColorStore()
   // Terminal captures its connection for the PTY lifetime, so callers must key it per server/session.
   const connection = useServerSDK()().server
   const directory = sdk().directory
@@ -279,9 +282,12 @@ export const Terminal = (props: TerminalProps) => {
     const resolved = uiBase ? tintResolvedTheme(resolvedBase, reference, uiBase) : resolvedBase
     const resolvedV2 = uiBase ? tintResolvedV2Theme(resolvedV2Base, reference, uiBase) : resolvedV2Base
     const text = resolved["text-stronger"] ?? fallback.foreground
-    const background = settings.general.newLayoutDesigns()
-      ? (resolveV2Token(resolvedV2, "v2-background-bg-base") ?? fallback.background)
-      : (resolved["background-stronger"] ?? fallback.background)
+    const background = shiftAvaHsb(
+      settings.general.newLayoutDesigns()
+        ? (resolveV2Token(resolvedV2, "v2-background-bg-base") ?? fallback.background)
+        : (resolved["background-stronger"] ?? fallback.background),
+      surfaces.wells(),
+    )
     const alpha = mode === "dark" ? 0.25 : 0.2
     const base = text.startsWith("#") ? (text as HexColor) : (fallback.foreground as HexColor)
     const selectionBackground = withAlpha(base, alpha)

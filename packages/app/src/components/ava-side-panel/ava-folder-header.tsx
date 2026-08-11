@@ -93,18 +93,25 @@ function AvaFolderDropdownItem(props: {
         )}
       </TruncatedCursorTooltip>
       <Show when={props.closeable}>
-        <button
-          type="button"
-          class="ava-folder-dropdown-close"
-          aria-label={props.closeLabel}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            props.onClose?.()
-          }}
-        >
-          <Icon name="close-small" size="small" />
-        </button>
+        <TruncatedCursorTooltip text={props.closeLabel}>
+          {(handlers) => (
+            <button
+              type="button"
+              class="ava-folder-dropdown-close"
+              aria-label={props.closeLabel}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                props.onClose?.()
+              }}
+              onMouseEnter={handlers.onMouseEnter}
+              onMouseLeave={handlers.onMouseLeave}
+              onMouseMove={handlers.onMouseMove}
+            >
+              <Icon name="close-small" size="small" />
+            </button>
+          )}
+        </TruncatedCursorTooltip>
       </Show>
     </button>
   )
@@ -204,7 +211,7 @@ export function AvaFolderHeader(props: {
           <span class="ava-folder-name-chevron" data-visible={hasMenu() ? "" : undefined} aria-hidden="true">
             <Icon name="chevron-down" size="small" />
           </span>
-          <TruncatedCursorTooltip text={tooltipText()} disabled={!truncated()}>
+          <TruncatedCursorTooltip text={tooltipText()} disabled={!isProject() && !truncated()}>
             {(handlers) => (
               <span
                 class="ava-folder-name-text"
@@ -248,7 +255,7 @@ export function AvaFolderHeader(props: {
                   tooltip={tooltipFor(tab)}
                   project={tab === AVA_PROJECT_FOLDER_TAB}
                   closeable={isBrowseFolderTab(tab)}
-                  closeLabel={language.t("common.closeTab")}
+                  closeLabel={language.t("ava.sidePanel.closeFolder")}
                   onSelect={() => {
                     props.tabs.setActive(tab)
                     closeMenu()

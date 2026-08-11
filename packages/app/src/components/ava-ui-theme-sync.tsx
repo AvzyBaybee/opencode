@@ -1,15 +1,15 @@
-import { Component, createEffect } from "solid-js"
-import type { HexColor } from "@opencode-ai/ui/theme"
-import { hexToRgb } from "@opencode-ai/ui/theme"
+import { Component, createEffect, onCleanup } from "solid-js"
+import { hexToRgb, type HexColor } from "@opencode-ai/ui/theme"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 import { useAvaUiBaseColorStore } from "./ava-ui-base-color-store"
+import { applyAvaUiSurfaces, removeAvaUiSurfaces } from "./ava-ui-surface-adjust"
 
 function isUsableBaseColor(color: HexColor | null) {
   if (!color) return true
   if (!/^#[0-9a-fA-F]{6}$/.test(color)) return false
 
-  const { r, g, b } = hexToRgb(color)
-  const max = Math.max(r, g, b)
+  const rgb = hexToRgb(color)
+  const max = Math.max(rgb.r, rgb.g, rgb.b)
   return max >= 0.08
 }
 
@@ -26,6 +26,26 @@ export const AvaUiThemeSync: Component = () => {
     }
     theme.setUiBaseColor(color)
   })
+
+  createEffect(() => {
+    theme.uiBaseColor()
+    theme.mode()
+    theme.themeId()
+    const frame = store.frame()
+    const panels = store.panels()
+    const raised = store.raised()
+    const wells = store.wells()
+    const run = { cancelled: false }
+    queueMicrotask(() => {
+      if (run.cancelled) return
+      applyAvaUiSurfaces({ frame, panels, raised, wells })
+    })
+    onCleanup(() => {
+      run.cancelled = true
+    })
+  })
+
+  onCleanup(removeAvaUiSurfaces)
 
   return null
 }

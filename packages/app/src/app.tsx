@@ -274,6 +274,7 @@ declare global {
     }
     api?: {
       setTitlebar?: (theme: { mode: "light" | "dark"; scheme?: "system" | "light" | "dark" }) => Promise<void>
+      setBackgroundColor?: (color: string) => Promise<void>
       exportDebugLogs?: () => Promise<string>
     }
   }
