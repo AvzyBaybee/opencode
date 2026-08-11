@@ -462,7 +462,11 @@ export function SessionHeader() {
                         aria-expanded={view().terminal.opened()}
                         aria-controls="terminal-panel"
                       >
-                        <Icon size="small" name={view().terminal.opened() ? "terminal-active" : "terminal"} />
+                        <Icon
+                          size="small"
+                          class="scale-110"
+                          name={view().terminal.opened() ? "terminal-active" : "terminal"}
+                        />
                       </Button>
                     </TooltipKeybind>
 
@@ -567,7 +571,7 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
             aria-label={props.state.terminalLabel}
             aria-expanded={props.state.terminalOpened}
             aria-controls="terminal-panel"
-            icon={<IconV2 name="console" />}
+            icon={<IconV2 name="console" class="scale-110" />}
           />
         </TooltipV2>
       </Show>

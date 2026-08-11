@@ -127,10 +127,12 @@
   height: 32px;
   /* Equal side padding so the name stays optically centered despite absolute chevron/+ */
   padding-inline: 28px;
+  border: none;
   border-radius: 10px;
   color: var(--text-strong, var(--v2-text-text-base));
   background: color-mix(in srgb, var(--surface-raised-base, var(--v2-background-bg-strong, #2a2a2a)) 88%, transparent);
   box-sizing: border-box;
+  cursor: default;
 }
 
 .ava-folder-name-button[data-project] {
@@ -143,8 +145,18 @@
   );
 }
 
-.ava-folder-name-button:hover {
-  background: color-mix(in srgb, var(--surface-base-hover, #ffffff) 10%, var(--surface-raised-base, #2a2a2a));
+.ava-folder-name-button:hover,
+.ava-folder-dropdown-item:hover {
+  background: color-mix(in srgb, #ffffff 0%, var(--surface-raised-base, var(--v2-background-bg-strong, #2a2a2a)));
+}
+
+.ava-folder-name-button[aria-haspopup="menu"] {
+  cursor: pointer;
+}
+
+.ava-folder-name-button[role="button"]:focus-visible {
+  outline: 2px solid var(--border-interactive-base, var(--text-interactive-base, #6b8cff));
+  outline-offset: 1px;
 }
 
 .ava-folder-name-chevron {
@@ -169,6 +181,7 @@
   display: block;
   position: absolute;
   inset-inline: 28px;
+  top: 50%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -176,6 +189,20 @@
   font-size: 13px;
   line-height: 1.2;
   text-align: center;
+  transform: translateY(-50%);
+}
+
+.ava-folder-dropdown-label {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+  pointer-events: auto;
 }
 
 .ava-folder-name-add {
@@ -188,79 +215,105 @@
   justify-content: center;
   width: 24px;
   height: 24px;
+  padding: 0;
+  border: none;
   border-radius: 6px;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
   color: var(--text-weak, var(--v2-text-text-weak));
+  background: transparent;
+  cursor: pointer;
 }
 
-.ava-folder-name-add:hover {
+.ava-folder-name-button:hover .ava-folder-name-add,
+.ava-folder-name-button[aria-expanded="true"] .ava-folder-name-add {
+  opacity: 1;
+}
+
+.ava-folder-name-add:hover,
+.ava-folder-dropdown-close:hover {
   color: var(--text-strong, var(--v2-text-text-base));
-  background: color-mix(in srgb, var(--surface-base-hover, #ffffff) 10%, transparent);
+  background-color: color-mix(in srgb, #ffffff 20%, var(--surface-raised-base, var(--v2-background-bg-strong, #2a2a2a)));
+}
+
+.ava-folder-name-add:focus-visible {
+  outline: 2px solid var(--border-interactive-base, var(--text-interactive-base, #6b8cff));
+  outline-offset: 1px;
 }
 
 .ava-folder-dropdown-close {
   position: absolute;
   inset-inline-end: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
   border-radius: 4px;
   opacity: 0;
   color: var(--text-weak, var(--v2-text-text-weak));
+  background: transparent;
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
 .ava-folder-dropdown-item:hover .ava-folder-dropdown-close {
   opacity: 1;
 }
 
-.ava-folder-dropdown-close:hover {
-  color: var(--text-strong, var(--v2-text-text-base));
-  background: color-mix(in srgb, var(--surface-base-hover, #ffffff) 12%, transparent);
+.ava-folder-dropdown-close:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--border-interactive-base, var(--text-interactive-base, #6b8cff));
+  outline-offset: 1px;
 }
 
 .ava-folder-dropdown {
   position: absolute;
   top: calc(100% + 4px);
-  left: 50%;
-  transform: translateX(-50%);
+  inset-inline: 0;
   z-index: 30;
-  min-width: 160px;
-  max-width: min(280px, 70vw);
+  width: 100%;
   padding: 4px;
   border-radius: 10px;
   border: 1px solid var(--border-weak-base, var(--v2-border-border-weak));
   background: var(--background-stronger, var(--v2-background-bg-strong));
   box-shadow: 0 8px 24px color-mix(in srgb, #000 24%, transparent);
+  box-sizing: border-box;
 }
 
 .ava-folder-dropdown-item {
   position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
-  padding: 6px 22px 6px 10px;
-  border-radius: 8px;
-  text-align: start;
+  height: 32px;
+  margin: 0;
+  padding-inline: 28px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
   color: var(--text-strong, var(--v2-text-text-base));
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: background 120ms ease;
 }
 
 .ava-folder-dropdown-item[data-project] {
   color: color-mix(in srgb, var(--text-strong, #e8e8e8) 68%, var(--text-interactive-base, #6b8cff) 32%);
   font-weight: 600;
-}
-
-.ava-folder-dropdown-item[data-active] {
-  background: color-mix(in srgb, var(--surface-base-hover, #ffffff) 8%, transparent);
-}
-
-.ava-folder-dropdown-item:hover {
-  background: color-mix(in srgb, var(--surface-base-hover, #ffffff) 10%, transparent);
-}
-
-.ava-folder-dropdown-label {
-  min-width: 0;
 }
 
 .ava-side-panel-copy-slot {
