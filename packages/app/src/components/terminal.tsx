@@ -2,6 +2,7 @@ import { withAlpha } from "@opencode-ai/ui/theme/color"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 import { resolveThemeVariant } from "@opencode-ai/ui/theme/resolve"
 import { resolveThemeVariantV2 } from "@opencode-ai/ui/theme/v2/resolve"
+import { getThemeReferenceBase, tintResolvedTheme, tintResolvedV2Theme } from "@opencode-ai/ui/theme"
 import type { HexColor, ResolvedV2Theme } from "@opencode-ai/ui/theme/types"
 import { showToast } from "@/utils/toast"
 import type { FitAddon, Ghostty, Terminal as Term } from "ghostty-web"
@@ -269,11 +270,16 @@ export const Terminal = (props: TerminalProps) => {
     if (!currentTheme) return fallback
     const variant = mode === "dark" ? currentTheme.dark : currentTheme.light
     if (!variant?.seeds && !variant?.palette) return fallback
-    const resolved = resolveThemeVariant(variant, mode === "dark")
+    const dark = mode === "dark"
+    const resolvedBase = resolveThemeVariant(variant, dark)
+    const resolvedV2Base = resolveThemeVariantV2(variant, dark)
+    const uiBase = theme.uiBaseColor()
+    const reference = getThemeReferenceBase(currentTheme, dark)
+    const resolved = uiBase ? tintResolvedTheme(resolvedBase, reference, uiBase) : resolvedBase
+    const resolvedV2 = uiBase ? tintResolvedV2Theme(resolvedV2Base, reference, uiBase) : resolvedV2Base
     const text = resolved["text-stronger"] ?? fallback.foreground
     const background = settings.general.newLayoutDesigns()
-      ? (resolveV2Token(resolveThemeVariantV2(variant, mode === "dark"), "v2-background-bg-base") ??
-        fallback.background)
+      ? (resolveV2Token(resolvedV2, "v2-background-bg-base") ?? fallback.background)
       : (resolved["background-stronger"] ?? fallback.background)
     const alpha = mode === "dark" ? 0.25 : 0.2
     const base = text.startsWith("#") ? (text as HexColor) : (fallback.foreground as HexColor)

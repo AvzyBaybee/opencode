@@ -57,6 +57,8 @@ export type SessionReviewV2SidebarProps = {
   minWidth?: number
   maxWidth?: number
   viewportRef?: (element: HTMLDivElement) => void
+  /** Renders between the filter and the scrollable tree (does not scroll away). */
+  leading?: JSX.Element
   children?: JSX.Element
 }
 
@@ -123,6 +125,7 @@ export function SessionReviewV2Sidebar(props: SessionReviewV2SidebarProps) {
               }
             />
           </div>
+          <Show when={props.leading}>{props.leading}</Show>
           <ScrollView
             data-slot="session-review-v2-sidebar-tree"
             class="group/file-tree-v2"

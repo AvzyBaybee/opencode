@@ -260,7 +260,7 @@
   }
 
   :not(pre) > code[data-path-link="true"] {
-    cursor: pointer;
+    cursor: grab;
     text-decoration: underline;
     text-decoration-color: color-mix(in oklch, var(--markdown-inline-code-path-color) 35%, transparent);
     text-underline-offset: 2px;

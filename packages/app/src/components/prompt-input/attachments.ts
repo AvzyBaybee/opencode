@@ -5,7 +5,7 @@ import { type ContentPart, type ImageAttachmentPart, type usePrompt } from "@/co
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { uuid } from "@/utils/uuid"
-import { getCursorPosition } from "./editor-dom"
+import { getCursorPosition, setCursorPosition } from "./editor-dom"
 import { createBlobReference, type DraftStore } from "@/utils/draft-store"
 import { attachmentMime } from "./files"
 import { normalizePaste, pasteMode } from "./paste"
@@ -192,7 +192,10 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
     const filePrefix = "file:"
     if (plainText?.startsWith(filePrefix)) {
       const filePath = plainText.slice(filePrefix.length)
+      const editor = input.editor()
+      const cursor = input.prompt.cursor() ?? (editor ? getCursorPosition(editor) : undefined)
       input.focusEditor()
+      if (editor && cursor != null) setCursorPosition(editor, cursor)
       input.addPart({ type: "file", path: filePath, content: "@" + filePath, start: 0, end: 0 })
       return
     }

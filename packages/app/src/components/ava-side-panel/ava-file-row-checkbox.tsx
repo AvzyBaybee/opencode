@@ -12,7 +12,8 @@ export function AvaFileRowCheckbox(props: {
 
   return (
     <div
-      class="shrink-0 pl-1"
+      class="ava-file-row-checkbox shrink-0 pl-1"
+      classList={{ "ava-file-row-checkbox-checked": props.checked }}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()

@@ -1,8 +1,11 @@
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import "@opencode-ai/ui/v2/file-tree-v2.css"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import { kindChange, kindLabel, type Kind } from "@/components/file-tree-v2"
+import { pathToFileUrl, withFileDragImage } from "@/components/file-tree"
+import { stickyVirtualPinned, stickyVirtualY } from "@/components/sticky-virtual-row"
+import { TruncatedCursorTooltip, isTextTruncated } from "@/components/truncated-cursor-tooltip"
 import { normalizePath } from "@/pages/session/v2/review-diff-kinds"
 import { createVirtualizer, defaultRangeExtractor } from "@tanstack/solid-virtual"
 import { virtualScrollElement } from "@/components/virtual-scroll-element"
@@ -34,6 +37,81 @@ export function applyFileListKeyDown(
   event.preventDefault()
 }
 
+function SessionFileListRow(props: {
+  path: string
+  optionID?: string
+  role?: "listbox"
+  selected: boolean
+  highlighted: boolean
+  kind?: Kind
+  nameTooltip?: boolean
+  draggable: boolean
+  onFocus: () => void
+  onBlur: () => void
+  onClick: () => void
+  onDblClick?: () => void
+}) {
+  const directory = () => (props.path.includes("/") ? getDirectory(props.path) : undefined)
+  const filename = () => getFilename(props.path)
+  const label = () => (directory() ? `${directory()}${filename()}` : filename())
+  const [nameEl, setNameEl] = createSignal<HTMLSpanElement>()
+  const [truncated, setTruncated] = createSignal(false)
+
+  return (
+    <TruncatedCursorTooltip text={label()} disabled={!props.nameTooltip || !truncated()}>
+      {(handlers) => (
+        <button
+          type="button"
+          id={props.optionID}
+          role={props.role ? "option" : undefined}
+          aria-selected={props.role ? props.selected : undefined}
+          data-slot="file-tree-v2-row"
+          data-path={props.path}
+          data-selected={props.selected ? "" : undefined}
+          data-highlighted={props.highlighted ? "" : undefined}
+          style="padding-left: 8px"
+          draggable={props.draggable}
+          onDragStart={(event) => {
+            if (!props.draggable) return
+            event.dataTransfer?.setData("text/plain", `file:${props.path}`)
+            event.dataTransfer?.setData("text/uri-list", pathToFileUrl(props.path))
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
+            withFileDragImage(event)
+          }}
+          onFocus={props.onFocus}
+          onBlur={props.onBlur}
+          onClick={props.onClick}
+          onDblClick={props.onDblClick}
+          onMouseEnter={(event) => {
+            if (props.nameTooltip) setTruncated(isTextTruncated(nameEl()))
+            handlers.onMouseEnter(event)
+          }}
+          onMouseLeave={handlers.onMouseLeave}
+          onMouseMove={handlers.onMouseMove}
+        >
+          <span class="filetree-iconpair size-4">
+            <FileIcon node={{ path: props.path, type: "file" }} class="size-4 filetree-icon filetree-icon--color" />
+            <FileIcon node={{ path: props.path, type: "file" }} class="size-4 filetree-icon filetree-icon--mono" mono />
+          </span>
+          <span ref={setNameEl} class="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
+            <Show when={directory()}>
+              {(value) => <span class="text-12-medium text-text-muted truncate min-w-0 shrink">{value()}</span>}
+            </Show>
+            <span class="text-12-medium text-text-base truncate min-w-0 shrink-0">{filename()}</span>
+          </span>
+          <Show when={props.kind}>
+            {(value) => (
+              <span data-slot="file-tree-v2-change" data-change={kindChange(value())}>
+                {kindLabel(value())}
+              </span>
+            )}
+          </Show>
+        </button>
+      )}
+    </TruncatedCursorTooltip>
+  )
+}
+
 // Flat variant of FileTreeV2 for filtered results: reuses its data-component and
 // row data-slots on purpose so file-tree-v2.css styles both. data-highlighted has
 // no CSS of its own — it folds into data-selected below and only exists as the
@@ -46,14 +124,20 @@ export function SessionFileListV2(props: {
   id?: string
   role?: "listbox"
   optionID?: (path: string) => string
+  stickyActive?: boolean
+  nameTooltip?: boolean
+  draggable?: boolean
   onFileClick: (path: string) => void
   onFileDoubleClick?: (path: string) => void
 }) {
   const active = () => normalizePath(props.active ?? "")
   const highlighted = () => normalizePath(props.highlighted ?? "")
   const normalized = createMemo(() => props.files.map(normalizePath))
+  const stickyKey = () => active() || highlighted()
   const [root, setRoot] = createSignal<HTMLDivElement>()
   const [focused, setFocused] = createSignal<string>()
+  const [scrollTop, setScrollTop] = createSignal(0)
+  const [viewportHeight, setViewportHeight] = createSignal(0)
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     get count() {
       return props.files.length
@@ -69,11 +153,29 @@ export function SessionFileListV2(props: {
     },
     rangeExtractor: (range) => {
       const indexes = defaultRangeExtractor(range)
-      const path = focused()
+      const path = focused() || (props.stickyActive ? stickyKey() : undefined)
       const index = path ? props.files.indexOf(path) : -1
       if (index < 0 || indexes.includes(index)) return indexes
       return [...indexes, index].sort((a, b) => a - b)
     },
+  })
+
+  createEffect(() => {
+    if (!props.stickyActive) return
+    const scroll = virtualScrollElement(root())
+    if (!scroll) return
+    const sync = () => {
+      setScrollTop(scroll.scrollTop)
+      setViewportHeight(scroll.clientHeight)
+    }
+    sync()
+    scroll.addEventListener("scroll", sync, { passive: true })
+    const observer = new ResizeObserver(sync)
+    observer.observe(scroll)
+    onCleanup(() => {
+      scroll.removeEventListener("scroll", sync)
+      observer.disconnect()
+    })
   })
 
   createEffect(() => {
@@ -88,6 +190,20 @@ export function SessionFileListV2(props: {
     () => new Map(virtualizer.getVirtualItems().map((item) => [item.key, item] as const)),
   )
   const virtualRowKeys = createMemo(() => virtualizer.getVirtualItems().map((item) => item.key))
+  const draggable = () => props.draggable ?? true
+
+  const rowTransform = (path: string, start: number, size: number) => {
+    if (!props.stickyActive || normalizePath(path) !== stickyKey()) {
+      return { y: start, pinned: undefined as undefined }
+    }
+    const y = stickyVirtualY({
+      start,
+      size,
+      scrollTop: scrollTop(),
+      viewportHeight: viewportHeight(),
+    })
+    return { y, pinned: stickyVirtualPinned(start, y) }
+  }
 
   return (
     <div
@@ -105,58 +221,40 @@ export function SessionFileListV2(props: {
           const selected = () => (highlighted() ? highlighted() === value : active() === value)
           const highlightedRow = () => highlighted() === value
           const kind = () => props.kinds?.get(value)
-          const directory = () => (value.includes("/") ? getDirectory(value) : undefined)
-          const filename = () => getFilename(value)
           return (
             <Show when={virtualItemByKey().get(key)}>
-              {(item) => (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "0",
-                    left: "0",
-                    width: "100%",
-                    height: `${item().size}px`,
-                    transform: `translateY(${item().start}px)`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    id={props.optionID?.(path)}
-                    role={props.role ? "option" : undefined}
-                    aria-selected={props.role ? selected() : undefined}
-                    data-slot="file-tree-v2-row"
-                    data-path={path}
-                    data-selected={selected() ? "" : undefined}
-                    data-highlighted={highlightedRow() ? "" : undefined}
-                    style="padding-left: 8px"
-                    onFocus={() => setFocused(path)}
-                    onBlur={() => setFocused(undefined)}
-                    onClick={() => props.onFileClick(path)}
-                    onDblClick={() => props.onFileDoubleClick?.(path)}
+              {(item) => {
+                const placed = () => rowTransform(path, item().start, item().size)
+                return (
+                  <div
+                    data-ava-sticky-active={placed().pinned}
+                    style={{
+                      position: "absolute",
+                      top: "0",
+                      left: "0",
+                      width: "100%",
+                      height: `${item().size}px`,
+                      transform: `translateY(${placed().y}px)`,
+                      "z-index": placed().pinned ? "4" : undefined,
+                    }}
                   >
-                    <span class="filetree-iconpair size-4">
-                      <FileIcon node={{ path, type: "file" }} class="size-4 filetree-icon filetree-icon--color" />
-                      <FileIcon node={{ path, type: "file" }} class="size-4 filetree-icon filetree-icon--mono" mono />
-                    </span>
-                    <span class="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
-                      <Show when={directory()}>
-                        {(value) => (
-                          <span class="text-12-medium text-text-muted truncate min-w-0 shrink">{value()}</span>
-                        )}
-                      </Show>
-                      <span class="text-12-medium text-text-base truncate min-w-0 shrink-0">{filename()}</span>
-                    </span>
-                    <Show when={kind()}>
-                      {(value) => (
-                        <span data-slot="file-tree-v2-change" data-change={kindChange(value())}>
-                          {kindLabel(value())}
-                        </span>
-                      )}
-                    </Show>
-                  </button>
-                </div>
-              )}
+                    <SessionFileListRow
+                      path={path}
+                      optionID={props.optionID?.(path)}
+                      role={props.role}
+                      selected={selected()}
+                      highlighted={highlightedRow()}
+                      kind={kind()}
+                      nameTooltip={props.nameTooltip}
+                      draggable={draggable()}
+                      onFocus={() => setFocused(path)}
+                      onBlur={() => setFocused(undefined)}
+                      onClick={() => props.onFileClick(path)}
+                      onDblClick={() => props.onFileDoubleClick?.(path)}
+                    />
+                  </div>
+                )
+              }}
             </Show>
           )
         }}

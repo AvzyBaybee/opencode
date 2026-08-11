@@ -2,6 +2,7 @@ import { createEffect, createMemo, createResource, Show } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { Icon } from "@opencode-ai/ui/icon"
+import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { SessionFilePanelV2Empty } from "@opencode-ai/session-ui/v2/session-file-panel-v2"
 import { sampledChecksum } from "@opencode-ai/core/util/encode"
 import { useFile } from "@/context/file"
@@ -49,7 +50,7 @@ export function AvaProjectFilePreview(props: { path?: string }) {
             </div>
           }
         >
-          <div class="min-h-0 flex-1 overflow-auto">
+          <ScrollView class="ava-file-preview-scroll" thumbVisibility="hover">
             <Dynamic
               component={fileComponent}
               mode="text"
@@ -60,7 +61,7 @@ export function AvaProjectFilePreview(props: { path?: string }) {
               }}
               class="select-text"
             />
-          </div>
+          </ScrollView>
         </Show>
       )}
     </Show>
@@ -102,7 +103,7 @@ export function AvaBrowseFilePreview(props: { path?: string }) {
             </div>
           }
         >
-          <div class="min-h-0 flex-1 overflow-auto">
+          <ScrollView class="ava-file-preview-scroll" thumbVisibility="hover">
             <Dynamic
               component={fileComponent}
               mode="text"
@@ -113,7 +114,7 @@ export function AvaBrowseFilePreview(props: { path?: string }) {
               }}
               class="select-text"
             />
-          </div>
+          </ScrollView>
         </Show>
       )}
     </Show>

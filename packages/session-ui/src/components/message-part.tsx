@@ -241,7 +241,13 @@ function MessageActionButton(
     >
       <TooltipV2 value={props.label} placement="top" gutter={4}>
         <IconButtonV2
-          icon={<IconV2 name={icon()} size="small" />}
+          icon={
+            <IconV2
+              name={icon()}
+              size={props.icon === "trash" ? "normal" : "small"}
+              class={props.icon === "trash" ? "scale-[1.12]" : undefined}
+            />
+          }
           size="normal"
           variant="ghost-muted"
           disabled={props.disabled}
@@ -1434,17 +1440,17 @@ export function UserMessageDisplay(props: {
               aria-label={i18n.t("ui.message.revertMessage")}
             />
           </Show>
-          <Show when={props.actions?.delete}>
+          <Show when={text()}>
             <MessageActionButton
-              icon="trash"
-              label={i18n.t("ui.message.deleteMessage")}
+              icon={copied() ? "check" : "copy"}
+              label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
               useV2={props.useV2Actions}
-              disabled={!!busy()}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={(event) => {
                 event.stopPropagation()
-                remove()
+                void handleCopy()
               }}
-              aria-label={i18n.t("ui.message.deleteMessage")}
+              aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
             />
           </Show>
           <Show when={props.actions?.edit && text()}>
@@ -1461,17 +1467,17 @@ export function UserMessageDisplay(props: {
               aria-label={i18n.t("ui.message.editMessage")}
             />
           </Show>
-          <Show when={text()}>
+          <Show when={props.actions?.delete}>
             <MessageActionButton
-              icon={copied() ? "check" : "copy"}
-              label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
+              icon="trash"
+              label={i18n.t("ui.message.deleteMessage")}
               useV2={props.useV2Actions}
-              onMouseDown={(event) => event.preventDefault()}
+              disabled={!!busy()}
               onClick={(event) => {
                 event.stopPropagation()
-                void handleCopy()
+                remove()
               }}
-              aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
+              aria-label={i18n.t("ui.message.deleteMessage")}
             />
           </Show>
         </div>
@@ -1859,19 +1865,6 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
               onClick={handleCopy}
               aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
             />
-            <Show when={props.actions?.delete}>
-              <MessageActionButton
-                icon="trash"
-                label={i18n.t("ui.message.deleteMessage")}
-                useV2={props.useV2Actions}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleDelete()
-                }}
-                aria-label={i18n.t("ui.message.deleteMessage")}
-              />
-            </Show>
             <Show when={props.actions?.edit}>
               <MessageActionButton
                 icon="edit"
@@ -1883,6 +1876,19 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
                   handleEdit()
                 }}
                 aria-label={i18n.t("ui.message.editMessage")}
+              />
+            </Show>
+            <Show when={props.actions?.delete}>
+              <MessageActionButton
+                icon="trash"
+                label={i18n.t("ui.message.deleteMessage")}
+                useV2={props.useV2Actions}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleDelete()
+                }}
+                aria-label={i18n.t("ui.message.deleteMessage")}
               />
             </Show>
             <Show when={meta()}>

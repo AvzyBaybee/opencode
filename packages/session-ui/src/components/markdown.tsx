@@ -282,9 +282,11 @@ function markPathLinks(root: HTMLDivElement, enabled: boolean) {
     if (!(code instanceof HTMLElement)) continue
     if (!enabled || code.dataset.inlineCodeKind !== "path") {
       delete code.dataset.pathLink
+      code.draggable = false
       continue
     }
     code.dataset.pathLink = "true"
+    code.draggable = true
   }
 }
 
@@ -304,8 +306,26 @@ function setupPathReveal(
     input.revealPath(resolved)
   }
 
+  const handleDragStart = (event: DragEvent) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const code = target.closest('code[data-path-link="true"]')
+    if (!(code instanceof HTMLElement)) return
+    const resolved = resolvePathReference(code.textContent ?? "", input.directory())
+    if (!resolved) {
+      event.preventDefault()
+      return
+    }
+    event.dataTransfer?.setData("text/plain", `file:${resolved}`)
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
+  }
+
   root.addEventListener("click", handleClick)
-  return () => root.removeEventListener("click", handleClick)
+  root.addEventListener("dragstart", handleDragStart)
+  return () => {
+    root.removeEventListener("click", handleClick)
+    root.removeEventListener("dragstart", handleDragStart)
+  }
 }
 
 function decorate(root: HTMLDivElement, labels: CopyLabels, pathLinks: boolean) {
