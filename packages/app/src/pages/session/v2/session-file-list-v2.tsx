@@ -204,8 +204,10 @@ export function SessionFileListV2(props: {
             <Show when={virtualItemByKey().get(key)}>
               {(item) => {
                 const placed = () => sticky.place(value, stickyKey() || undefined, item().start, item().size)
+                const layered = () => selected() || value === (stickyKey() || "")
                 return (
                   <div
+                    data-ava-sticky-layer={layered() ? "" : undefined}
                     data-ava-sticky-active={placed().pinned}
                     style={{
                       position: "absolute",
@@ -214,8 +216,7 @@ export function SessionFileListV2(props: {
                       width: "100%",
                       height: `${item().size}px`,
                       transform: `translateY(${placed().y}px)`,
-                      "z-index":
-                        placed().pinned === "bottom" ? "12" : placed().pinned ? "11" : "auto",
+                      "z-index": layered() ? (placed().pinned === "bottom" ? "12" : "11") : "auto",
                     }}
                   >
                     <SessionFileListRow

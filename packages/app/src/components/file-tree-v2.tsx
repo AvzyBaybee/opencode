@@ -276,8 +276,10 @@ export default function FileTreeV2(props: {
               <Show when={rowByKey().get(key as string)}>
                 {(row) => {
                   const placed = () => sticky.place(row().node.path, active(), item().start, item().size)
+                  const layered = () => row().node.path === active()
                   return (
                     <div
+                      data-ava-sticky-layer={layered() ? "" : undefined}
                       data-ava-sticky-active={placed().pinned}
                       style={{
                         position: "absolute",
@@ -286,8 +288,7 @@ export default function FileTreeV2(props: {
                         width: "100%",
                         height: `${item().size}px`,
                         transform: `translateY(${placed().y}px)`,
-                        "z-index":
-                          placed().pinned === "bottom" ? "12" : placed().pinned ? "11" : "auto",
+                        "z-index": layered() ? (placed().pinned === "bottom" ? "12" : "11") : "auto",
                       }}
                     >
                       <Show

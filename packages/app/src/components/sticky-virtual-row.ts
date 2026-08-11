@@ -1,3 +1,9 @@
+/** Extra Y so a top-pinned row sits below overlay chrome instead of under it. */
+export function stickyOverlayTopInset(input: { viewportTop: number; overlayBottom?: number }) {
+  if (input.overlayBottom == null) return 0
+  return Math.max(0, input.overlayBottom - input.viewportTop)
+}
+
 /** Clamp a virtualized row's Y so the active item stays on-screen while scrolling. */
 export function stickyVirtualY(input: {
   start: number

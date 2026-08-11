@@ -44,6 +44,7 @@
   z-index: 8;
 }
 
+[data-component="file-tree-v2"] [data-ava-sticky-layer],
 [data-component="file-tree-v2"] [data-ava-sticky-active] {
   z-index: 11;
 }
@@ -317,6 +318,9 @@
 }
 
 .ava-side-panel-copy-slot {
+  position: relative;
+  z-index: 13;
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
   padding: 6px 8px;
