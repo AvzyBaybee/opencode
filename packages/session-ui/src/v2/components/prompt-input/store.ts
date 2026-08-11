@@ -74,13 +74,24 @@ export function createPromptInputV2Store(input: PromptInputV2StoreInput) {
       setStore()("context", "items", (items) => items.filter((item) => item.key !== key))
     },
     addMention(mention: PromptInputV2FilePart | PromptInputV2AgentPart) {
-      const text = store()
-        .prompt.map((part) => ("content" in part ? part.content : ""))
-        .join("")
-      const end = store().cursor ?? text.length
-      const start = text.slice(0, end).lastIndexOf("@")
-      setStore()("prompt", insertMention(store().prompt, start < 0 ? end : start, end, mention))
-      setStore()("cursor", (start < 0 ? end : start) + mention.content.length + 1)
+      const prompt = store().prompt
+      const end = store().cursor ?? promptLength(prompt)
+      const start = mentionInsertStart(prompt, end)
+
+      let working = prompt
+      let insertStart = start
+      let insertEnd = end
+
+      if (start === end && needsMentionLeadingSpace(prompt, end)) {
+        working = insertText(prompt, end, " ")
+        insertStart = end + 1
+        insertEnd = end + 1
+      }
+
+      batch(() => {
+        setStore()("prompt", insertMention(working, insertStart, insertEnd, mention))
+        setStore()("cursor", insertStart + mention.content.length)
+      })
     },
     addAttachment(attachment: PromptInputV2Attachment) {
       setStore()("prompt", (prompt) => [...prompt, attachment])
@@ -114,6 +125,52 @@ function insertText(prompt: PromptInputV2Prompt, cursor: number, content: string
   return withOffsets(parts)
 }
 
+function needsMentionLeadingSpace(prompt: PromptInputV2Prompt, end: number) {
+  if (end === 0) return false
+
+  let position = 0
+  for (const part of prompt) {
+    if (part.type === "image") continue
+    const partStart = position
+    const partEnd = position + part.content.length
+
+    if (end > partEnd) {
+      position = partEnd
+      continue
+    }
+
+    if (end < partEnd) {
+      const before = part.content.slice(0, end - partStart)
+      return before.length > 0 && !/\s$/.test(before)
+    }
+
+    if (part.type === "file" || part.type === "agent") return true
+    if (part.type === "text") {
+      if (part.content.length === 0) return false
+      return !/\s$/.test(part.content)
+    }
+  }
+
+  return false
+}
+
+function mentionInsertStart(prompt: PromptInputV2Prompt, end: number) {
+  let position = 0
+  for (const part of prompt) {
+    if (part.type === "image") continue
+    const partStart = position
+    const partEnd = position + part.content.length
+    if (end < partStart) return end
+    if (part.type === "text" && end > partStart && end <= partEnd) {
+      const atMatch = part.content.slice(0, end - partStart).match(/@(\S*)$/)
+      return atMatch ? partStart + atMatch.index! : end
+    }
+    if (end <= partEnd) return end
+    position = partEnd
+  }
+  return end
+}
+
 function insertMention(
   prompt: PromptInputV2Prompt,
   start: number,
@@ -121,19 +178,29 @@ function insertMention(
   mention: PromptInputV2FilePart | PromptInputV2AgentPart,
 ): PromptInputV2Prompt {
   let position = 0
+  let inserted = false
   const parts = prompt.flatMap<PromptInputV2Prompt[number]>((part) => {
     if (part.type === "image") return [part]
     const partStart = position
-    position += part.content.length
-    if (part.type !== "text" || start < partStart || end > position) return [part]
-    const before = part.content.slice(0, start - partStart)
-    const after = part.content.slice(end - partStart)
-    return [
-      ...(before ? [{ type: "text" as const, content: before, start: 0, end: 0 }] : []),
-      mention,
-      { type: "text" as const, content: ` ${after}`, start: 0, end: 0 },
-    ]
+    const partEnd = position + part.content.length
+    position = partEnd
+
+    if (inserted) return [part]
+    if (part.type === "text" && start >= partStart && end <= partEnd) {
+      inserted = true
+      const before = part.content.slice(0, start - partStart)
+      const after = part.content.slice(end - partStart)
+      return [
+        ...(before ? [{ type: "text" as const, content: before, start: 0, end: 0 }] : []),
+        mention,
+        ...(after ? [{ type: "text" as const, content: after, start: 0, end: 0 }] : []),
+      ]
+    }
+    if (start >= partEnd) return [part]
+    inserted = true
+    return [mention, part]
   })
+  if (!inserted) parts.push(mention)
   return withOffsets(parts)
 }
 

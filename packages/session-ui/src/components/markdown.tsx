@@ -320,11 +320,28 @@ function setupPathReveal(
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
   }
 
+  const handleDragOver = (event: DragEvent) => {
+    if (!event.dataTransfer?.types.includes("text/plain")) return
+    event.preventDefault()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "none"
+  }
+
+  const handleDrop = (event: DragEvent) => {
+    const plain = event.dataTransfer?.getData("text/plain")
+    if (!plain?.startsWith("file:")) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   root.addEventListener("click", handleClick)
   root.addEventListener("dragstart", handleDragStart)
+  root.addEventListener("dragover", handleDragOver)
+  root.addEventListener("drop", handleDrop)
   return () => {
     root.removeEventListener("click", handleClick)
     root.removeEventListener("dragstart", handleDragStart)
+    root.removeEventListener("dragover", handleDragOver)
+    root.removeEventListener("drop", handleDrop)
   }
 }
 

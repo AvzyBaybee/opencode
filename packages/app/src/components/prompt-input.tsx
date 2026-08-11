@@ -1033,11 +1033,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
 
     if (selection.rangeCount === 0) return false
-    const range = selection.getRangeAt(0)
+    let range = selection.getRangeAt(0)
     if (!editorRef.contains(range.startContainer)) return false
 
     if (part.type === "file" || part.type === "agent") {
-      const cursorPosition = getCursorPosition(editorRef)
+      const cursorPosition = prompt.cursor() ?? getCursorPosition(editorRef)
+      setCursorPosition(editorRef, cursorPosition)
+      if (selection.rangeCount === 0) return false
+      range = selection.getRangeAt(0)
       const rawText = prompt
         .current()
         .map((p) => ("content" in p ? p.content : ""))
@@ -1050,6 +1053,18 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         const start = atMatch.index ?? cursorPosition - atMatch[0].length
         setRangeEdge(editorRef, range, "start", start)
         setRangeEdge(editorRef, range, "end", cursorPosition)
+      }
+
+      if (
+        !atMatch &&
+        cursorPosition > 0 &&
+        textBeforeCursor.length > 0 &&
+        !/\s$/.test(textBeforeCursor)
+      ) {
+        const space = document.createTextNode(" ")
+        range.insertNode(space)
+        range.setStartAfter(space)
+        range.collapse(true)
       }
 
       range.deleteContents()
@@ -1165,7 +1180,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     setDraggingType: (type) => setStore("draggingType", type),
     focusEditor: () => {
       editorRef.focus()
-      setCursorPosition(editorRef, promptLength(prompt.current()))
     },
     addPart,
     readClipboardImage: platform.readClipboardImage,
@@ -1463,7 +1477,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         onSubmit={handleSubmit}
         classList={{
           "group/prompt-input": true,
-          "border-icon-info-active border-dashed": store.draggingType !== null,
           [props.class ?? ""]: !!props.class,
         }}
       >

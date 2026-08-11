@@ -22,6 +22,7 @@ import type {
   PromptInputV2Suggestion,
 } from "./types"
 import type { PromptInputV2Interaction, PromptInputV2SelectControl } from "./interaction"
+import { setPromptInputV2EditorCursor } from "./interaction"
 import "./attachments.css"
 
 export type {
@@ -52,8 +53,10 @@ export function PromptInputV2(props: PromptInputV2Props) {
   const view = props.controller.view
   let editor: HTMLDivElement | undefined
   let localInput = false
+  let syncingEditor = false
   const updateCursor = () => {
-    if (!editor || !window.getSelection()?.isCollapsed) return
+    if (!editor || syncingEditor || !window.getSelection()?.isCollapsed) return
+    if (document.activeElement !== editor) return
     props.controller.onCursor(promptInputV2Cursor(editor))
   }
   const mode = createMemo(() => state.mode)
@@ -65,12 +68,17 @@ export function PromptInputV2(props: PromptInputV2Props) {
 
   createEffect(() => {
     const parts = props.controller.parts()
+    const cursor = props.controller.cursor()
     if (!editor) return
     if (localInput) {
       localInput = false
       return
     }
-    renderPromptInputV2Editor(editor, parts)
+    syncingEditor = true
+    renderPromptInputV2Editor(editor, parts, cursor)
+    queueMicrotask(() => {
+      syncingEditor = false
+    })
   })
 
   return (
@@ -113,7 +121,6 @@ export function PromptInputV2(props: PromptInputV2Props) {
         class="group/prompt-input relative min-h-[96px] w-full overflow-clip rounded-xl bg-v2-background-bg-base"
         classList={{
           "shadow-[var(--v2-elevation-raised)]": !props.borderUnderlay,
-          "border border-v2-icon-icon-info border-dashed": state.drag === "active",
         }}
         onSubmit={(event) => {
           event.preventDefault()
@@ -125,7 +132,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
         onDrop={props.controller.onDrop}
       >
         <Show when={state.drag === "active"}>
-          <div class="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-xl bg-v2-background-bg-base/90 text-v2-text-text-base">
+          <div class="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-xl border-2 border-dashed border-v2-icon-icon-info bg-v2-background-bg-base/90 text-v2-text-text-base">
             {i18n.t("ui.promptInput.dropFiles")}
           </div>
         </Show>
@@ -163,6 +170,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             class="relative z-10 block min-h-[60px] max-h-[180px] w-full overflow-y-auto whitespace-pre-wrap bg-transparent px-4 pt-4 pb-2 text-[13px] font-[440] leading-5 text-v2-text-text-base focus:outline-none empty:before:content-['\200B'] [&_[data-mention=file]]:text-syntax-property [&_[data-mention=agent]]:text-syntax-type [&_[data-mention=reference]]:text-syntax-keyword"
             classList={{ "font-mono!": state.mode === "shell", "opacity-50": props.disabled }}
             onInput={(event) => {
+              if (syncingEditor) return
               const cursor = promptInputV2Cursor(event.currentTarget)
               const prompt = parsePromptInputV2Editor(event.currentTarget)
               const images = props.controller.parts().filter((part) => part.type === "image")
@@ -269,7 +277,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
   )
 }
 
-function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2Prompt) {
+function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2Prompt, cursor?: number) {
   const active = document.activeElement === editor
   editor.replaceChildren(
     ...prompt.flatMap<Node>((part) => {
@@ -290,12 +298,7 @@ function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2
     }),
   )
   if (!active) return
-  const selection = window.getSelection()
-  const range = document.createRange()
-  range.selectNodeContents(editor)
-  range.collapse(false)
-  selection?.removeAllRanges()
-  selection?.addRange(range)
+  setPromptInputV2EditorCursor(editor, cursor ?? promptInputV2Cursor(editor))
 }
 
 function parsePromptInputV2Editor(editor: HTMLDivElement) {

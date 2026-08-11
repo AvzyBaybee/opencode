@@ -78,6 +78,65 @@ describe("prompt input v2 store", () => {
     expect(prompt.state.cursor).toBe(5)
   })
 
+  test("appends multiple mentions at the cursor", () => {
+    const [state, setState] = createStore<PromptInputV2PersistedState>({
+      prompt: [{ type: "text", content: "", start: 0, end: 0 }],
+      cursor: 0,
+      context: { items: [] },
+    })
+    const prompt = createPromptInputV2Store([state, setState])
+
+    prompt.addMention({ type: "file", path: "a.ts", content: "@a.ts", start: 0, end: 0 })
+    prompt.addMention({ type: "file", path: "b.ts", content: "@b.ts", start: 0, end: 0 })
+
+    expect(prompt.state.prompt).toEqual([
+      { type: "file", path: "a.ts", content: "@a.ts", start: 0, end: 5 },
+      { type: "text", content: " ", start: 5, end: 6 },
+      { type: "file", path: "b.ts", content: "@b.ts", start: 6, end: 11 },
+    ])
+    expect(prompt.state.cursor).toBe(11)
+  })
+
+  test("adds a leading space before a mention after typed text", () => {
+    const [state, setState] = createStore<PromptInputV2PersistedState>({
+      prompt: [{ type: "text", content: "hello", start: 0, end: 5 }],
+      cursor: 5,
+      context: { items: [] },
+    })
+    const prompt = createPromptInputV2Store([state, setState])
+
+    prompt.addMention({ type: "file", path: "a.ts", content: "@a.ts", start: 0, end: 0 })
+
+    expect(prompt.state.prompt).toEqual([
+      { type: "text", content: "hello ", start: 0, end: 6 },
+      { type: "file", path: "a.ts", content: "@a.ts", start: 6, end: 11 },
+    ])
+    expect(prompt.state.cursor).toBe(11)
+  })
+
+  test("replaces only a trailing @ query when completing a mention", () => {
+    const [state, setState] = createStore<PromptInputV2PersistedState>({
+      prompt: [
+        { type: "text", content: "see ", start: 0, end: 4 },
+        { type: "file", path: "a.ts", content: "@a.ts", start: 4, end: 9 },
+        { type: "text", content: " @b", start: 9, end: 12 },
+      ],
+      cursor: 12,
+      context: { items: [] },
+    })
+    const prompt = createPromptInputV2Store([state, setState])
+
+    prompt.addMention({ type: "file", path: "b.ts", content: "@b.ts", start: 0, end: 0 })
+
+    expect(prompt.state.prompt).toEqual([
+      { type: "text", content: "see ", start: 0, end: 4 },
+      { type: "file", path: "a.ts", content: "@a.ts", start: 4, end: 9 },
+      { type: "text", content: " ", start: 9, end: 10 },
+      { type: "file", path: "b.ts", content: "@b.ts", start: 10, end: 15 },
+    ])
+    expect(prompt.state.cursor).toBe(15)
+  })
+
   test("mutates context, attachments, and model through shared actions", () => {
     const prompt = createPromptStore()
     const context = { key: "file:src/index.ts", type: "file" as const, path: "src/index.ts" }
@@ -90,9 +149,8 @@ describe("prompt input v2 store", () => {
 
     expect(prompt.state.context.items).toEqual([context])
     expect(prompt.state.prompt).toEqual([
-      { type: "text", content: "old", start: 0, end: 3 },
-      { type: "file", path: "src/app.ts", content: "@src/app.ts", start: 3, end: 14 },
-      { type: "text", content: " ", start: 14, end: 15 },
+      { type: "text", content: "old ", start: 0, end: 4 },
+      { type: "file", path: "src/app.ts", content: "@src/app.ts", start: 4, end: 15 },
     ])
     expect(prompt.state.model?.variant).toBe("thinking")
 

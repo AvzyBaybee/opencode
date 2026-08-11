@@ -5,7 +5,7 @@ import { type ContentPart, type ImageAttachmentPart, type usePrompt } from "@/co
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { uuid } from "@/utils/uuid"
-import { getCursorPosition, setCursorPosition } from "./editor-dom"
+import { getCursorPosition } from "./editor-dom"
 import { createBlobReference, type DraftStore } from "@/utils/draft-store"
 import { attachmentMime } from "./files"
 import { normalizePaste, pasteMode } from "./paste"
@@ -163,70 +163,62 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
   })
 
   let enteredPrompt = false
-  let fromFileExplorer = false
+  let dropCursor: number | undefined
 
-  const promptAtPoint = (x: number, y: number) => {
-    const el = document.elementFromPoint(x, y)
-    return (
-      el instanceof Element &&
-      !!el.closest('[data-component="prompt-input"], [data-ava-prompt-dropzone]')
-    )
+  const restoreDropCursor = () => {
+    if (dropCursor === undefined) return
+    const target = input.prompt.capture()
+    target.set(target.current(), dropCursor)
+  }
+
+  const pointInPromptDropZone = (x: number, y: number) => {
+    for (const el of document.querySelectorAll(
+      '[data-component="prompt-input-v2"], [data-ava-prompt-dropzone]',
+    )) {
+      if (!(el instanceof HTMLElement)) continue
+      const rect = el.getBoundingClientRect()
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return true
+    }
+    return false
+  }
+
+  const setDraggingTypeFromTransfer = (transfer: DataTransfer | null | undefined) => {
+    if (!transfer) return
+    if (transfer.types.includes("Files")) {
+      input.setDraggingType("image")
+      return
+    }
+    if (transfer.types.includes("text/plain")) input.setDraggingType("@mention")
   }
 
   const handleGlobalDragStart = (event: DragEvent) => {
     enteredPrompt = false
-    const target = event.target
-    fromFileExplorer =
-      target instanceof Element &&
-      !!target.closest(
-        '[data-slot="file-tree-v2-row"], [data-component="file-tree-v2"], .ava-side-panel, .ava-file-list-row',
-      )
+    dropCursor = input.prompt.capture().cursor()
+    setDraggingTypeFromTransfer(event.dataTransfer)
   }
 
   const handleGlobalDragEnd = () => {
     enteredPrompt = false
-    fromFileExplorer = false
+    dropCursor = undefined
     input.setDraggingType(null)
   }
 
   const handleGlobalDragOver = (event: DragEvent) => {
     if (input.isDialogActive()) return
-    if (!promptAtPoint(event.clientX, event.clientY)) return
+
+    setDraggingTypeFromTransfer(event.dataTransfer)
+    if (!pointInPromptDropZone(event.clientX, event.clientY)) return
 
     enteredPrompt = true
     event.preventDefault()
-    const hasFiles = event.dataTransfer?.types.includes("Files")
-    const hasText = event.dataTransfer?.types.includes("text/plain")
-    if (hasFiles) {
-      input.setDraggingType("image")
-      return
-    }
-    if (hasText) input.setDraggingType("@mention")
-  }
-
-  const handleGlobalDragLeave = (event: DragEvent) => {
-    if (input.isDialogActive()) return
-    if (!event.relatedTarget) {
-      input.setDraggingType(null)
-      return
-    }
-    if (event.relatedTarget instanceof Element) {
-      if (!event.relatedTarget.closest('[data-component="prompt-input"], [data-ava-prompt-dropzone]')) {
-        input.setDraggingType(null)
-      }
-    }
   }
 
   const handleGlobalDrop = async (event: DragEvent) => {
     if (input.isDialogActive()) return
 
-    const onPrompt = promptAtPoint(event.clientX, event.clientY)
-    // File-explorer drags must physically enter the prompt before release.
-    if (fromFileExplorer && !enteredPrompt) {
-      input.setDraggingType(null)
-      return
-    }
-    if (!onPrompt) {
+    const onPrompt = pointInPromptDropZone(event.clientX, event.clientY)
+    // Drags must physically enter the prompt before release.
+    if (!enteredPrompt || !onPrompt) {
       input.setDraggingType(null)
       return
     }
@@ -239,9 +231,9 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
     const filePrefix = "file:"
     if (plainText?.startsWith(filePrefix)) {
       const filePath = plainText.slice(filePrefix.length)
-      // Append at the live caret / end — do not restore a stale pre-drag cursor.
-      input.focusEditor()
+      restoreDropCursor()
       input.addPart({ type: "file", path: filePath, content: "@" + filePath, start: 0, end: 0 })
+      input.focusEditor()
       return
     }
 
@@ -255,7 +247,6 @@ export function createPromptAttachments(input: PromptAttachmentsInput) {
     makeEventListener(document, "dragstart", handleGlobalDragStart)
     makeEventListener(document, "dragend", handleGlobalDragEnd)
     makeEventListener(document, "dragover", handleGlobalDragOver)
-    makeEventListener(document, "dragleave", handleGlobalDragLeave)
     makeEventListener(document, "drop", handleGlobalDrop)
   })
 

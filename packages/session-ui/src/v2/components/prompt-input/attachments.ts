@@ -86,6 +86,7 @@ export function createPromptInputV2Attachments(
     capture: () => PromptTarget
     editor: () => HTMLElement | undefined
     focusEditor: () => void
+    setCursor: (cursor: number) => void
     addPart: (part: PromptInputV2Prompt[number]) => boolean
     setDraggingType: (type: "image" | "@mention" | null) => void
   },
@@ -177,30 +178,90 @@ export function createPromptInputV2Attachments(
   }
   const handleDrop = async (event: DragEvent) => {
     if (input.isDialogActive()) return
+    if (!enteredPrompt || !pointInPromptDropZone(event.clientX, event.clientY)) {
+      input.setDraggingType(null)
+      return
+    }
     event.preventDefault()
     input.setDraggingType(null)
     const plainText = event.dataTransfer?.getData("text/plain")
     if (plainText?.startsWith("file:")) {
       const path = plainText.slice("file:".length)
-      input.focusEditor()
+      restoreDropCursor()
       input.addPart({ type: "file", path, content: `@${path}`, start: 0, end: 0 })
+      input.focusEditor()
       return
     }
     const files = event.dataTransfer?.files
     if (files) await addAttachments(Array.from(files))
   }
 
+  let enteredPrompt = false
+  let dropCursor: number | undefined
+
+  const restoreDropCursor = () => {
+    if (dropCursor === undefined) return
+    input.setCursor(dropCursor)
+  }
+
+  const pointInPromptDropZone = (x: number, y: number) => {
+    for (const el of document.querySelectorAll(
+      '[data-component="prompt-input-v2"], [data-ava-prompt-dropzone]',
+    )) {
+      if (!(el instanceof HTMLElement)) continue
+      const rect = el.getBoundingClientRect()
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return true
+    }
+    return false
+  }
+
+  const setDraggingTypeFromTransfer = (transfer: DataTransfer | null | undefined) => {
+    if (!transfer) return
+    if (transfer.types.includes("Files")) {
+      input.setDraggingType("image")
+      return
+    }
+    if (transfer.types.includes("text/plain")) input.setDraggingType("@mention")
+  }
+
+  const handleGlobalDragStart = (event: DragEvent) => {
+    enteredPrompt = false
+    dropCursor = input.capture()?.cursor()
+    setDraggingTypeFromTransfer(event.dataTransfer)
+  }
+
+  const handleGlobalDragEnd = () => {
+    enteredPrompt = false
+    dropCursor = undefined
+    input.setDraggingType(null)
+  }
+
+  const handleGlobalDragOver = (event: DragEvent) => {
+    if (input.isDialogActive()) return
+
+    setDraggingTypeFromTransfer(event.dataTransfer)
+    if (!pointInPromptDropZone(event.clientX, event.clientY)) return
+
+    enteredPrompt = true
+    event.preventDefault()
+  }
+
+  const handleGlobalDrop = async (event: DragEvent) => {
+    if (input.isDialogActive()) return
+    if (!enteredPrompt || !pointInPromptDropZone(event.clientX, event.clientY)) {
+      input.setDraggingType(null)
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    await handleDrop(event)
+  }
+
   onMount(() => {
-    makeEventListener(document, "dragover", (event) => {
-      if (input.isDialogActive()) return
-      event.preventDefault()
-      if (event.dataTransfer?.types.includes("Files")) input.setDraggingType("image")
-      else if (event.dataTransfer?.types.includes("text/plain")) input.setDraggingType("@mention")
-    })
-    makeEventListener(document, "dragleave", (event) => {
-      if (!input.isDialogActive() && !event.relatedTarget) input.setDraggingType(null)
-    })
-    makeEventListener(document, "drop", handleDrop)
+    makeEventListener(document, "dragstart", handleGlobalDragStart)
+    makeEventListener(document, "dragend", handleGlobalDragEnd)
+    makeEventListener(document, "dragover", handleGlobalDragOver)
+    makeEventListener(document, "drop", handleGlobalDrop)
   })
 
   return {

@@ -94,7 +94,8 @@ export function createPromptInputV2Controller(input: {
           set: draft.setPrompt,
         }),
         editor: () => editor,
-        focusEditor: () => editor?.focus(),
+        focusEditor: () => restoreFocus(),
+        setCursor: (cursor) => draft.setCursor(cursor),
         addPart,
         setDraggingType: (type) => dispatch({ type: type ? "drag.enter" : "drag.leave" }),
       })
@@ -243,10 +244,10 @@ export function createPromptInputV2Controller(input: {
     dispatch({ type: "popover.results", ids })
   })
 
-  const restoreFocus = (cursor = draft.state.cursor ?? promptLength(draft.state.prompt)) => {
+  const restoreFocus = (cursor?: number) => {
     requestAnimationFrame(() => {
       editor?.focus()
-      setEditorCursor(editor, cursor)
+      setEditorCursor(editor, cursor ?? draft.state.cursor ?? promptLength(draft.state.prompt))
     })
   }
 
@@ -300,6 +301,9 @@ export function createPromptInputV2Controller(input: {
     },
     parts() {
       return draft.state.prompt
+    },
+    cursor() {
+      return draft.state.cursor
     },
     addPart,
     contextItem(id: string) {
@@ -401,14 +405,11 @@ export function createPromptInputV2Controller(input: {
     },
     onDragEnter(event: DragEvent) {
       event.preventDefault()
-      dispatch({ type: "drag.enter" })
     },
     onDragOver(event: DragEvent) {
       event.preventDefault()
     },
-    onDragLeave() {
-      dispatch({ type: "drag.leave" })
-    },
+    onDragLeave() {},
     onDrop(event: DragEvent) {
       event.preventDefault()
       dispatch({ type: "drag.leave" })
@@ -462,21 +463,52 @@ function editorCursor(editor: HTMLElement) {
 
 function setEditorCursor(editor: HTMLElement | undefined, cursor: number) {
   if (!editor) return
-  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
-  let remaining = cursor
-  let node = walker.nextNode()
-  while (node) {
-    const length = node.textContent?.length ?? 0
-    if (remaining <= length) {
-      const range = document.createRange()
-      range.setStart(node, remaining)
-      range.collapse(true)
-      const selection = window.getSelection()
-      selection?.removeAllRanges()
-      selection?.addRange(range)
+  const selection = window.getSelection()
+  if (!selection) return
+  const range = document.createRange()
+  let position = 0
+
+  const apply = () => {
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+
+  for (const node of editor.childNodes) {
+    const length =
+      node instanceof HTMLElement && node.dataset.mention
+        ? (node.textContent?.length ?? 0)
+        : (node.textContent?.length ?? 0)
+    const end = position + length
+
+    if (cursor < end) {
+      if (node instanceof HTMLElement && node.dataset.mention) {
+        range.setStartBefore(node)
+      } else if (node.nodeType === Node.TEXT_NODE) {
+        range.setStart(node, cursor - position)
+      }
+      apply()
       return
     }
-    remaining -= length
-    node = walker.nextNode()
+
+    if (cursor === end) {
+      if (node instanceof HTMLElement && node.dataset.mention) {
+        range.setStartAfter(node)
+      } else if (node.nodeType === Node.TEXT_NODE) {
+        range.setStart(node, length)
+      }
+      apply()
+      return
+    }
+
+    position = end
   }
+
+  range.selectNodeContents(editor)
+  range.collapse(false)
+  apply()
+}
+
+export function setPromptInputV2EditorCursor(editor: HTMLElement, cursor: number) {
+  setEditorCursor(editor, cursor)
 }
