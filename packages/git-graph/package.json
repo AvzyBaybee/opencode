@@ -1,0 +1,32 @@
+{
+  "name": "@opencode-ai/git-graph",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/host/git-graph-panel.tsx",
+    "./contract": "./src/domain/contract.ts",
+    "./source": "./src/source/index.ts",
+    "./layout": "./src/layout/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/standalone/dev.ts",
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test --only-failures ./src ./fixtures",
+    "perf:generate": "bun run fixtures/generate-perf.ts"
+  },
+  "dependencies": {
+    "@opencode-ai/ui": "workspace:*",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:"
+  }
+}

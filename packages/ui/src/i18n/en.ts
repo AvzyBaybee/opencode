@@ -202,6 +202,8 @@ export const dict: Record<string, string> = {
   "ui.message.revertMessage": "Revert message",
   "ui.message.editMessage": "Edit message",
   "ui.message.editMessageConfirm": "Save changes to this message?",
+  "ui.message.editRevertAfter": "Delete all messages after this one, reverting the chat to this point.",
+  "ui.message.editQuiet": "Only edit this message, without deleting any other messages.",
   "ui.message.saveMessage": "Save message",
   "ui.message.deleteMessage": "Delete message",
   "ui.message.deleteMessageConfirm": "Delete this message from the conversation?",

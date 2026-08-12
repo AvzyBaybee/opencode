@@ -35,7 +35,6 @@ import { Tabs } from "@opencode-ai/ui/tabs"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
-import { TextField } from "@opencode-ai/ui/text-field"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
 import { Button } from "@opencode-ai/ui/button"
@@ -561,7 +560,8 @@ export default function Page() {
   })
   const activeTab = tabState.activeTab
   const activeFileTab = tabState.activeFileTab
-  const revertMessageID = createMemo(() => info()?.revert?.messageID)
+  const [purgingEdit, setPurgingEdit] = createSignal(false)
+  const revertMessageID = createMemo(() => (purgingEdit() ? undefined : info()?.revert?.messageID))
   const timeline = createTimelineModel({ sessionID: () => params.id, revertMessageID })
   const historyLoading = timeline.history.loading
   const historyMore = timeline.history.more
@@ -1837,26 +1837,6 @@ export default function Page() {
           .catch(() => {})
       : Promise.resolve()
 
-  const revertMutation = useMutation(() => ({
-    mutationFn: async (input: { sessionID: string; messageID: string }) => {
-      const session = sdk().api.session
-      const target = sync()
-      const last = target.session.get(input.sessionID)?.revert
-      const value = draft(input.messageID)
-      await runPromptRollbackMutation({
-        capturePrompt: prompt.capture,
-        optimistic: (prompt) => {
-          roll(input.sessionID, { messageID: input.messageID }, target)
-          prompt.set(value)
-        },
-        request: () => halt(input.sessionID).then(() => session.revert.stage(input)),
-        complete: () => undefined,
-        rollback: () => roll(input.sessionID, last, target),
-        fail,
-      })
-    },
-  }))
-
   const deleteMutation = useMutation(() => ({
     mutationFn: async (input: { sessionID: string; messageID: string }) => {
       const target = sync()
@@ -1878,31 +1858,134 @@ export default function Page() {
     },
   }))
 
+  const saveMessageText = async (input: { sessionID: string; messageID: string; text: string }) => {
+    const target = sync()
+    const current = target.data.part[input.messageID]?.find((part) => part.type === "text")
+    if (!current) throw new Error(`Message has no editable text: ${input.messageID}`)
+    const next = { ...current, text: input.text }
+    target.session.apply({
+      type: "message.part.updated",
+      properties: { sessionID: input.sessionID, part: next, time: Date.now() },
+    })
+    try {
+      if ((await sdk().protocol) === "v1") {
+        await sdk().client.part.update({
+          sessionID: input.sessionID,
+          messageID: input.messageID,
+          partID: current.id,
+          part: next,
+        })
+      } else {
+        await sdk().client.editMessage(input)
+      }
+      await target.session.sync(input.sessionID, { force: true })
+    } catch (error) {
+      await target.session.sync(input.sessionID, { force: true })
+      throw error
+    }
+  }
+
+  const removeMessage = async (input: { sessionID: string; messageID: string }) => {
+    const target = sync()
+    target.session.apply({
+      type: "message.removed",
+      properties: { sessionID: input.sessionID, messageID: input.messageID },
+    })
+    if ((await sdk().protocol) === "v1") {
+      await sdk().client.session.deleteMessage(input)
+      return
+    }
+    await sdk().client.deleteMessage(input)
+  }
+
   const editMutation = useMutation(() => ({
+    mutationFn: saveMessageText,
+  }))
+
+  const revertEditMutation = useMutation(() => ({
     mutationFn: async (input: { sessionID: string; messageID: string; text: string }) => {
+      const session = sdk().api.session
       const target = sync()
-      const current = target.data.part[input.messageID]?.find((part) => part.type === "text")
-      if (!current) throw new Error(`Message has no editable text: ${input.messageID}`)
-      const next = { ...current, text: input.text }
-      target.session.apply({
-        type: "message.part.updated",
-        properties: { sessionID: input.sessionID, part: next, time: Date.now() },
-      })
+      const all = target.data.message[input.sessionID] ?? []
+      const index = all.findIndex((item) => item.id === input.messageID)
+      const current = index < 0 ? undefined : all[index]
+      if (!current) throw new Error(`Message not found: ${input.messageID}`)
+      const later = index < 0 ? [] : all.slice(index + 1)
+      const images = current.role === "user" ? draft(input.messageID).filter((part) => part.type === "image") : []
+
+      setPurgingEdit(true)
       try {
-        if ((await sdk().protocol) === "v1") {
-          await sdk().client.part.update({
-            sessionID: input.sessionID,
-            messageID: input.messageID,
-            partID: current.id,
-            part: next,
-          })
-        } else {
-          await sdk().client.editMessage(input)
+        await saveMessageText(input)
+        await halt(input.sessionID)
+        await session.revert.stage({ sessionID: input.sessionID, messageID: input.messageID })
+
+        const committed = await session.revert.commit({ sessionID: input.sessionID }).then(
+          () => true,
+          () => false,
+        )
+
+        if (!committed) {
+          for (const message of later) {
+            await removeMessage({ sessionID: input.sessionID, messageID: message.id }).catch(() => {})
+          }
+          await session.revert.commit({ sessionID: input.sessionID }).catch(() => {})
         }
+
+        if (committed) {
+          for (const message of later) {
+            target.session.apply({
+              type: "message.removed",
+              properties: { sessionID: input.sessionID, messageID: message.id },
+            })
+          }
+        }
+
+        if (current.role !== "user") {
+          await target.session.sync(input.sessionID, { force: true })
+          return
+        }
+
+        const agent = current.agent || local.agent.current()?.name
+        const selected = local.model.current()
+        const model = current.model
+          ? { providerID: current.model.providerID, modelID: current.model.modelID }
+          : selected
+            ? { providerID: selected.provider.id, modelID: selected.id }
+            : undefined
+        if (!agent || !model) {
+          await target.session.sync(input.sessionID, { force: true })
+          showToast({
+            variant: "error",
+            title: language.t("prompt.toast.modelAgentRequired.title"),
+            description: language.t("prompt.toast.modelAgentRequired.description"),
+          })
+          return
+        }
+
+        if (committed) await removeMessage(input).catch(() => {})
+
+        const nextPrompt = [{ type: "text" as const, content: input.text, start: 0, end: input.text.length }, ...images]
+        await sendFollowupDraft({
+          api: session,
+          sync: target,
+          serverSync: serverSync(),
+          draft: {
+            sessionID: input.sessionID,
+            sessionDirectory: sdk().directory,
+            prompt: nextPrompt,
+            context: [],
+            agent,
+            model,
+            variant: current.model.variant ?? local.model.variant.current() ?? undefined,
+          },
+          optimisticBusy: true,
+        }).catch((error) => {
+          prompt.set(nextPrompt, input.text.length)
+          throw error
+        })
         await target.session.sync(input.sessionID, { force: true })
-      } catch (error) {
-        await target.session.sync(input.sessionID, { force: true })
-        throw error
+      } finally {
+        setPurgingEdit(false)
       }
     },
   }))
@@ -1940,15 +2023,10 @@ export default function Page() {
     },
   }))
 
-  const reverting = createMemo(() => revertMutation.isPending || restoreMutation.isPending)
+  const reverting = createMemo(() => restoreMutation.isPending || revertEditMutation.isPending)
   const deleting = createMemo(() => deleteMutation.isPending)
-  const editing = createMemo(() => editMutation.isPending)
+  const editing = createMemo(() => editMutation.isPending || revertEditMutation.isPending)
   const restoring = createMemo(() => (restoreMutation.isPending ? restoreMutation.variables : undefined))
-
-  const revert = (input: { sessionID: string; messageID: string }) => {
-    if (reverting()) return
-    return revertMutation.mutateAsync(input)
-  }
 
   const restore = (id: string) => {
     if (!params.id || reverting()) return
@@ -1994,61 +2072,10 @@ export default function Page() {
     )
   }
 
-  const DialogEditMessage = (props: { text: string; onEdit: (text: string) => void }) => {
-    const [text, setText] = createSignal(props.text)
-    const submit = () => props.onEdit(text())
-
-    if (settings.general.newLayoutDesigns())
-      return (
-        <DialogV2 fit>
-          <DialogHeader hideClose>
-            <DialogTitleGroup
-              title={language.t("ui.message.editMessage")}
-              description={language.t("ui.message.editMessageConfirm")}
-            />
-          </DialogHeader>
-          <div class="px-6 py-2">
-            <TextField multiline autofocus value={text()} onChange={setText} />
-          </div>
-          <DialogFooter>
-            <ButtonV2 variant="ghost" onClick={() => dialog.close()}>
-              {language.t("common.cancel")}
-            </ButtonV2>
-            <ButtonV2 variant="contrast" disabled={!text().trim()} onClick={submit}>
-              {language.t("ui.message.saveMessage")}
-            </ButtonV2>
-          </DialogFooter>
-        </DialogV2>
-      )
-
-    return (
-      <Dialog title={language.t("ui.message.editMessage")} fit>
-        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
-          <TextField multiline autofocus value={text()} onChange={setText} />
-          <div class="flex justify-end gap-2">
-            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
-              {language.t("common.cancel")}
-            </Button>
-            <Button variant="primary" size="large" disabled={!text().trim()} onClick={submit}>
-              {language.t("ui.message.saveMessage")}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    )
-  }
-
-  const editMessage = (input: { sessionID: string; messageID: string; text: string }) => {
+  const editMessage = (input: { sessionID: string; messageID: string; text: string; mode: "quiet" | "revert" }) => {
     if (editing()) return
-    dialog.show(() => (
-      <DialogEditMessage
-        text={input.text}
-        onEdit={(text) => {
-          dialog.close()
-          void editMutation.mutateAsync({ ...input, text })
-        }}
-      />
-    ))
+    if (input.mode === "quiet") return editMutation.mutateAsync(input).catch(fail)
+    return revertEditMutation.mutateAsync(input).catch(fail)
   }
 
   const deleteMessage = (input: { sessionID: string; messageID: string }) => {
@@ -2097,7 +2124,6 @@ export default function Page() {
   }
 
   const actions = {
-    revert,
     delete: deleteMessage,
     edit: editMessage,
     openAttachment,

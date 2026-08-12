@@ -206,9 +206,34 @@
   }
 
   &:hover [data-slot="user-message-copy-wrapper"],
-  &:focus-within [data-slot="user-message-copy-wrapper"] {
+  &:focus-within [data-slot="user-message-copy-wrapper"],
+  &[data-editing] [data-slot="user-message-copy-wrapper"] {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  &[data-editing] [data-slot="user-message-text"] {
+    overflow: visible;
+    box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--v2-text-text-base, var(--text-strong)) 10%, transparent);
+  }
+
+  [data-slot="message-inline-editor"] {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
   }
 
   .text-text-strong {
@@ -257,9 +282,34 @@
   }
 
   &:hover [data-slot="text-part-copy-wrapper"],
-  &:focus-within [data-slot="text-part-copy-wrapper"] {
+  &:focus-within [data-slot="text-part-copy-wrapper"],
+  &[data-editing] [data-slot="text-part-copy-wrapper"] {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  &[data-editing] [data-slot="text-part-body"] {
+    box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--v2-text-text-base, var(--text-strong)) 8%, transparent);
+    border-radius: 10px;
+  }
+
+  [data-slot="message-inline-editor"] {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
   }
 }
 
@@ -1594,4 +1644,88 @@ body:not([data-new-layout]) {
   [data-component="tool-loaded-file"] {
     color: var(--text-weak);
   }
+}
+
+[data-component="dialog-v2"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-container"],
+[data-component="dialog"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-container"] {
+  width: min(640px, calc(100vw - 32px));
+}
+
+[data-component="dialog-v2"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-content"],
+[data-component="dialog"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-content"] {
+  position: relative;
+}
+
+[data-component="dialog-v2"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-header"] {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+}
+
+[data-component="dialog-v2"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-close-button"],
+[data-component="dialog"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-close-button"] {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  margin: 0;
+  z-index: 1;
+}
+
+[data-component="dialog-v2"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-title"],
+[data-component="dialog-v2"]:has([data-slot="message-edit-choice"]) [data-slot="dialog-header-title"] {
+  text-align: center;
+  width: 100%;
+}
+
+[data-slot="message-edit-choice-title"] {
+  display: block;
+  font-size: 20px;
+  font-weight: 580;
+  line-height: 26px;
+  letter-spacing: -0.2px;
+}
+
+[data-slot="message-edit-choice"] {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 24px 24px;
+}
+
+[data-slot="message-edit-choice-revert"],
+[data-slot="message-edit-choice-quiet"] {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88px;
+  padding: 16px 18px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--v2-text-text-base);
+  box-shadow: inset 0 0 0 1px var(--v2-border-border-muted);
+  font-size: 14px;
+  font-weight: 530;
+  line-height: 20px;
+  letter-spacing: -0.04px;
+  text-align: center;
+  text-wrap: balance;
+  white-space: normal;
+  overflow-wrap: break-word;
+  cursor: pointer;
+}
+
+[data-slot="message-edit-choice-revert"]:hover,
+[data-slot="message-edit-choice-quiet"]:hover {
+  background: var(--v2-overlay-simple-overlay-hover);
+}
+
+[data-slot="message-edit-choice-revert"]:focus-visible,
+[data-slot="message-edit-choice-quiet"]:focus-visible {
+  outline: 2px solid var(--v2-border-border-focus, Highlight);
+  outline-offset: 2px;
 }

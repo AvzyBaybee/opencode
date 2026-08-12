@@ -54,7 +54,10 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
+import { Button } from "@opencode-ai/ui/button"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
+import { Dialog } from "@opencode-ai/ui/dialog"
+import { DialogHeader, DialogTitle, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
@@ -174,11 +177,16 @@ export interface MessageProps {
 }
 
 export type SessionAction = (input: { sessionID: string; messageID: string }) => Promise<void> | void
-export type MessageEditAction = (input: { sessionID: string; messageID: string; text: string }) => Promise<void> | void
+export type MessageEditMode = "quiet" | "revert"
+export type MessageEditAction = (input: {
+  sessionID: string
+  messageID: string
+  text: string
+  mode: MessageEditMode
+}) => Promise<void> | void
 
 export type UserActions = {
   fork?: SessionAction
-  revert?: SessionAction
   delete?: SessionAction
   edit?: MessageEditAction
   openAttachment?: (file: FilePart) => void
@@ -250,9 +258,9 @@ function MessageActionButton(
               size="small"
               class={
                 props.icon === "trash"
-                  ? "scale-[1.1] translate-y-0.5"
+                  ? "scale-[1.25] -translate-y-0.23"
                   : props.icon === "edit"
-                    ? "-translate-y-0.5"
+                    ? "translate-y-[1px]"
                     : undefined
               }
             />
@@ -266,6 +274,148 @@ function MessageActionButton(
         />
       </TooltipV2>
     </Show>
+  )
+}
+
+function messageBoxSize(el: HTMLElement | undefined) {
+  if (!el) return { width: 0, height: 0 }
+  const box = el.getBoundingClientRect()
+  const css = getComputedStyle(el)
+  const padY = Number.parseFloat(css.paddingTop) + Number.parseFloat(css.paddingBottom)
+  return {
+    width: Math.round(box.width),
+    height: Math.max(0, Math.round(box.height - padY)),
+  }
+}
+
+function resizeMessageEditor(el: HTMLTextAreaElement, min: number) {
+  el.style.height = "auto"
+  el.style.height = `${Math.max(el.scrollHeight, min)}px`
+}
+
+function MessageInlineEditor(props: {
+  value: string
+  minHeight: number
+  disabled?: boolean
+  onChange: (value: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  let editor: HTMLTextAreaElement | undefined
+  const fit = (el: HTMLTextAreaElement) => resizeMessageEditor(el, props.minHeight)
+  const activate = () => {
+    if (!editor) return
+    fit(editor)
+    editor.focus()
+    const end = editor.value.length
+    editor.setSelectionRange(end, end)
+  }
+  onMount(() => {
+    activate()
+    requestAnimationFrame(activate)
+  })
+  return (
+    <textarea
+      data-slot="message-inline-editor"
+      value={props.value}
+      disabled={props.disabled}
+      rows={1}
+      autofocus
+      style={props.minHeight ? { "min-height": `${props.minHeight}px` } : undefined}
+      ref={(el) => {
+        editor = el
+        if (el) activate()
+      }}
+      onInput={(event) => {
+        fit(event.currentTarget)
+        props.onChange(event.currentTarget.value)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault()
+          props.onCancel()
+          return
+        }
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault()
+          props.onConfirm()
+        }
+      }}
+    />
+  )
+}
+
+function MessageEditActions(props: {
+  disabled?: boolean
+  confirmDisabled?: boolean
+  useV2?: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const i18n = useI18n()
+  return (
+    <Show
+      when={props.useV2}
+      fallback={
+        <>
+          <Button variant="ghost" size="small" disabled={props.disabled} onClick={props.onCancel}>
+            {i18n.t("ui.common.cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            size="small"
+            disabled={props.disabled || props.confirmDisabled}
+            onClick={props.onConfirm}
+          >
+            {i18n.t("ui.common.confirm")}
+          </Button>
+        </>
+      }
+    >
+      <ButtonV2 variant="ghost" size="small" disabled={props.disabled} onClick={props.onCancel}>
+        {i18n.t("ui.common.cancel")}
+      </ButtonV2>
+      <ButtonV2
+        variant="contrast"
+        size="small"
+        disabled={props.disabled || props.confirmDisabled}
+        onClick={props.onConfirm}
+      >
+        {i18n.t("ui.common.confirm")}
+      </ButtonV2>
+    </Show>
+  )
+}
+
+function DialogEditChoice(props: { onRevert: () => void; onQuiet: () => void }) {
+  const i18n = useI18n()
+  const choices = () => (
+    <div data-slot="message-edit-choice">
+      <button type="button" data-slot="message-edit-choice-revert" onClick={props.onRevert}>
+        {i18n.t("ui.message.editRevertAfter")}
+      </button>
+      <button type="button" data-slot="message-edit-choice-quiet" onClick={props.onQuiet}>
+        {i18n.t("ui.message.editQuiet")}
+      </button>
+    </div>
+  )
+
+  if (newLayout())
+    return (
+      <DialogV2 fit>
+        <DialogHeader>
+          <DialogTitle>
+            <span data-slot="message-edit-choice-title">{i18n.t("ui.message.editMessage")}</span>
+          </DialogTitle>
+        </DialogHeader>
+        {choices()}
+      </DialogV2>
+    )
+
+  return (
+    <Dialog title={i18n.t("ui.message.editMessage")} fit>
+      <div class="flex flex-col items-center px-6 pb-3 text-center">{choices()}</div>
+    </Dialog>
   )
 }
 
@@ -1235,9 +1385,15 @@ export function UserMessageDisplay(props: {
   const [state, setState] = createStore({
     copied: false,
     busy: false,
+    editing: false,
+    draft: "",
+    width: 0,
+    height: 0,
   })
   const copied = () => state.copied
   const busy = () => state.busy
+  const editing = () => state.editing
+  let textBox: HTMLDivElement | undefined
 
   const textPart = createMemo(
     () => props.parts?.find((p) => p.type === "text" && !(p as TextPart).synthetic) as TextPart | undefined,
@@ -1291,23 +1447,9 @@ export function UserMessageDisplay(props: {
     }
   }
 
-  const revert = () => {
-    const act = props.actions?.revert
-    if (!act || busy()) return
-    setState("busy", true)
-    void Promise.resolve()
-      .then(() =>
-        act({
-          sessionID: props.message.sessionID,
-          messageID: props.message.id,
-        }),
-      )
-      .finally(() => setState("busy", false))
-  }
-
   const remove = () => {
     const act = props.actions?.delete
-    if (!act || busy()) return
+    if (!act || busy() || editing()) return
     setState("busy", true)
     void Promise.resolve()
       .then(() =>
@@ -1319,19 +1461,48 @@ export function UserMessageDisplay(props: {
       .finally(() => setState("busy", false))
   }
 
-  const edit = () => {
+  const startEdit = () => {
+    if (!props.actions?.edit || busy() || editing()) return
+    const box = messageBoxSize(textBox)
+    setState({ editing: true, draft: text(), width: box.width, height: box.height })
+  }
+
+  const cancelEdit = () => {
+    setState({ editing: false, draft: "", width: 0, height: 0 })
+  }
+
+  const submitEdit = (mode: MessageEditMode) => {
     const act = props.actions?.edit
-    if (!act || busy()) return
+    const next = state.draft.trim()
+    if (!act || busy() || !next) return
+    setState({ editing: false, width: 0, height: 0 })
     setState("busy", true)
     void Promise.resolve()
       .then(() =>
         act({
           sessionID: props.message.sessionID,
           messageID: props.message.id,
-          text: text(),
+          text: next,
+          mode,
         }),
       )
-      .finally(() => setState("busy", false))
+      .finally(() => setState({ busy: false, draft: "" }))
+  }
+
+  const confirmEdit = () => {
+    if (!state.draft.trim() || busy()) return
+    dialog.show(() => (
+      <DialogEditChoice
+        onRevert={() => {
+          dialog.close()
+          submitEdit("revert")
+        }}
+        onQuiet={() => {
+          dialog.close()
+          submitEdit("quiet")
+        }}
+      />
+    ))
   }
 
   const renderAttachments = () => (
@@ -1386,10 +1557,10 @@ export function UserMessageDisplay(props: {
   )
 
   return (
-    <div data-component="user-message" data-timeline-part-id={textPart()?.id}>
+    <div data-component="user-message" data-editing={editing() ? "" : undefined} data-timeline-part-id={textPart()?.id}>
       <Show when={!props.useV2Actions}>{renderAttachments()}</Show>
       <Show
-        when={text()}
+        when={text() || editing()}
         fallback={
           <Show when={messageComments().length > 0}>
             <UserMessageComments comments={messageComments()} bounded={false} />
@@ -1398,19 +1569,43 @@ export function UserMessageDisplay(props: {
       >
         <div data-slot="user-message-body">
           <div
+            ref={(el) => {
+              textBox = el
+            }}
             data-slot="user-message-text"
             dir="auto"
-            data-comments={messageComments().length > 0 ? "true" : undefined}
+            data-comments={!editing() && messageComments().length > 0 ? "true" : undefined}
+            style={
+              editing() && state.width
+                ? {
+                    width: `${state.width}px`,
+                    "min-width": `${state.width}px`,
+                    "box-sizing": "border-box",
+                  }
+                : undefined
+            }
           >
-            <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
-            <Show when={messageComments().length > 0}>
+            <Show
+              when={editing()}
+              fallback={<HighlightedText text={text()} references={inlineFiles()} agents={agents()} />}
+            >
+              <MessageInlineEditor
+                value={state.draft}
+                minHeight={state.height}
+                disabled={busy()}
+                onChange={(value) => setState("draft", value)}
+                onCancel={cancelEdit}
+                onConfirm={confirmEdit}
+              />
+            </Show>
+            <Show when={!editing() && messageComments().length > 0}>
               <UserMessageComments comments={messageComments()} bounded />
             </Show>
           </div>
         </div>
       </Show>
       <Show when={props.useV2Actions}>{renderAttachments()}</Show>
-      <Show when={text() || (props.useV2Actions && messageComments().length > 0)}>
+      <Show when={text() || editing() || (props.useV2Actions && messageComments().length > 0)}>
         <div data-slot="user-message-copy-wrapper">
           <Show when={metaHead() || metaTail()}>
             <span data-slot="user-message-meta-wrap">
@@ -1431,58 +1626,59 @@ export function UserMessageDisplay(props: {
               </Show>
             </span>
           </Show>
-          <Show when={props.actions?.revert}>
-            <MessageActionButton
-              icon="reset"
-              label={i18n.t("ui.message.revertMessage")}
+          <Show
+            when={editing()}
+            fallback={
+              <>
+                <Show when={text()}>
+                  <MessageActionButton
+                    icon={copied() ? "check" : "copy"}
+                    label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
+                    useV2={props.useV2Actions}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void handleCopy()
+                    }}
+                    aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
+                  />
+                </Show>
+                <Show when={props.actions?.edit && text()}>
+                  <MessageActionButton
+                    icon="edit"
+                    label={i18n.t("ui.message.editMessage")}
+                    useV2={props.useV2Actions}
+                    disabled={!!busy()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      startEdit()
+                    }}
+                    aria-label={i18n.t("ui.message.editMessage")}
+                  />
+                </Show>
+                <Show when={props.actions?.delete}>
+                  <MessageActionButton
+                    icon="trash"
+                    label={i18n.t("ui.message.deleteMessage")}
+                    useV2={props.useV2Actions}
+                    disabled={!!busy()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      remove()
+                    }}
+                    aria-label={i18n.t("ui.message.deleteMessage")}
+                  />
+                </Show>
+              </>
+            }
+          >
+            <MessageEditActions
               useV2={props.useV2Actions}
-              disabled={!!busy()}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation()
-                revert()
-              }}
-              aria-label={i18n.t("ui.message.revertMessage")}
-            />
-          </Show>
-          <Show when={text()}>
-            <MessageActionButton
-              icon={copied() ? "check" : "copy"}
-              label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
-              useV2={props.useV2Actions}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation()
-                void handleCopy()
-              }}
-              aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
-            />
-          </Show>
-          <Show when={props.actions?.edit && text()}>
-            <MessageActionButton
-              icon="edit"
-              label={i18n.t("ui.message.editMessage")}
-              useV2={props.useV2Actions}
-              disabled={!!busy()}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation()
-                edit()
-              }}
-              aria-label={i18n.t("ui.message.editMessage")}
-            />
-          </Show>
-          <Show when={props.actions?.delete}>
-            <MessageActionButton
-              icon="trash"
-              label={i18n.t("ui.message.deleteMessage")}
-              useV2={props.useV2Actions}
-              disabled={!!busy()}
-              onClick={(event) => {
-                event.stopPropagation()
-                remove()
-              }}
-              aria-label={i18n.t("ui.message.deleteMessage")}
+              disabled={busy()}
+              confirmDisabled={!state.draft.trim()}
+              onCancel={cancelEdit}
+              onConfirm={confirmEdit}
             />
           </Show>
         </div>
@@ -1754,6 +1950,7 @@ PART_MAPPING["compaction"] = function CompactionPartDisplay() {
 
 PART_MAPPING["text"] = function TextPartDisplay(props) {
   const data = useData()
+  const dialog = useDialog()
   const i18n = useI18n()
   const numfmt = createMemo(() => new Intl.NumberFormat(i18n.locale()))
   const part = () => props.part as TextPart
@@ -1818,82 +2015,161 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     if (typeof props.showAssistantCopyPartID === "string") return props.showAssistantCopyPartID === part().id
     return isLastTextPart()
   })
-  const [copied, setCopied] = createSignal(false)
+  const [state, setState] = createStore({
+    copied: false,
+    editing: false,
+    draft: "",
+    width: 0,
+    height: 0,
+  })
+  const copied = () => state.copied
+  const editing = () => state.editing
+  let textBox: HTMLDivElement | undefined
 
   const handleCopy = async () => {
     const content = text()
     if (!content) return
     if (await writeClipboard(content)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setState("copied", true)
+      setTimeout(() => setState("copied", false), 2000)
     }
   }
 
   const handleDelete = () => {
     const act = props.actions?.delete
-    if (!act) return
+    if (!act || editing()) return
     void act({
       sessionID: props.message.sessionID,
       messageID: props.message.id,
     })
   }
 
-  const handleEdit = () => {
+  const startEdit = () => {
+    if (!props.actions?.edit || editing()) return
+    const box = messageBoxSize(textBox)
+    setState({ editing: true, draft: text(), width: box.width, height: box.height })
+  }
+
+  const cancelEdit = () => {
+    setState({ editing: false, draft: "", width: 0, height: 0 })
+  }
+
+  const submitEdit = (mode: MessageEditMode) => {
     const act = props.actions?.edit
-    if (!act) return
+    const next = state.draft.trim()
+    if (!act || !next) return
+    setState({ editing: false, draft: "", width: 0, height: 0 })
     void act({
       sessionID: props.message.sessionID,
       messageID: props.message.id,
-      text: text(),
+      text: next,
+      mode,
     })
+  }
+
+  const confirmEdit = () => {
+    if (!state.draft.trim()) return
+    dialog.show(() => (
+      <DialogEditChoice
+        onRevert={() => {
+          dialog.close()
+          submitEdit("revert")
+        }}
+        onQuiet={() => {
+          dialog.close()
+          submitEdit("quiet")
+        }}
+      />
+    ))
   }
 
   return (
-    <Show when={text()}>
-      <div data-component="text-part" data-timeline-part-id={part().id}>
-        <div data-slot="text-part-body">
-          <PacedMarkdown
-            text={text()}
-            cacheKey={part().id}
-            streaming={streaming()}
-            directory={data.directory}
-            revealPath={props.actions?.revealPath}
-          />
-        </div>
-        <Show when={showCopy()}>
-          <div data-slot="text-part-copy-wrapper" data-interrupted={interrupted() ? "" : undefined}>
-            <MessageActionButton
-              icon={copied() ? "check" : "copy"}
-              label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
-              useV2={props.useV2Actions}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={handleCopy}
-              aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
-            />
-            <Show when={props.actions?.edit}>
-              <MessageActionButton
-                icon="edit"
-                label={i18n.t("ui.message.editMessage")}
-                useV2={props.useV2Actions}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleEdit()
-                }}
-                aria-label={i18n.t("ui.message.editMessage")}
+    <Show when={text() || editing()}>
+      <div data-component="text-part" data-editing={editing() ? "" : undefined} data-timeline-part-id={part().id}>
+        <div
+          ref={(el) => {
+            textBox = el
+          }}
+          data-slot="text-part-body"
+          style={
+            editing() && state.width
+              ? {
+                  width: `${state.width}px`,
+                  "min-width": `${state.width}px`,
+                  "box-sizing": "border-box",
+                }
+              : undefined
+          }
+        >
+          <Show
+            when={editing()}
+            fallback={
+              <PacedMarkdown
+                text={text()}
+                cacheKey={part().id}
+                streaming={streaming()}
+                directory={data.directory}
+                revealPath={props.actions?.revealPath}
               />
-            </Show>
-            <Show when={props.actions?.delete}>
-              <MessageActionButton
-                icon="trash"
-                label={i18n.t("ui.message.deleteMessage")}
+            }
+          >
+            <MessageInlineEditor
+              value={state.draft}
+              minHeight={state.height}
+              onChange={(value) => setState("draft", value)}
+              onCancel={cancelEdit}
+              onConfirm={confirmEdit}
+            />
+          </Show>
+        </div>
+        <Show when={showCopy() || editing()}>
+          <div data-slot="text-part-copy-wrapper" data-interrupted={interrupted() ? "" : undefined}>
+            <Show
+              when={editing()}
+              fallback={
+                <>
+                  <MessageActionButton
+                    icon={copied() ? "check" : "copy"}
+                    label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
+                    useV2={props.useV2Actions}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={handleCopy}
+                    aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
+                  />
+                  <Show when={props.actions?.edit}>
+                    <MessageActionButton
+                      icon="edit"
+                      label={i18n.t("ui.message.editMessage")}
+                      useV2={props.useV2Actions}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        startEdit()
+                      }}
+                      aria-label={i18n.t("ui.message.editMessage")}
+                    />
+                  </Show>
+                  <Show when={props.actions?.delete}>
+                    <MessageActionButton
+                      icon="trash"
+                      label={i18n.t("ui.message.deleteMessage")}
+                      useV2={props.useV2Actions}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleDelete()
+                      }}
+                      aria-label={i18n.t("ui.message.deleteMessage")}
+                    />
+                  </Show>
+                </>
+              }
+            >
+              <MessageEditActions
                 useV2={props.useV2Actions}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleDelete()
-                }}
-                aria-label={i18n.t("ui.message.deleteMessage")}
+                confirmDisabled={!state.draft.trim()}
+                onCancel={cancelEdit}
+                onConfirm={confirmEdit}
               />
             </Show>
             <Show when={meta()}>
