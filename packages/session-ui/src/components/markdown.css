@@ -242,7 +242,8 @@
     padding: 0 6px;
     border: 0;
     border-radius: 6px;
-    background: var(--v2-background-bg-button-neutral);
+    background-color: var(--v2-background-bg-layer-02);
+    background-image: none;
     box-shadow: var(--v2-elevation-button-neutral);
     color: var(--v2-text-text-base);
     font: inherit;
@@ -254,6 +255,7 @@
   }
 
   [data-slot="markdown-preview-button"] .markdown-preview-toggle:hover {
+    background-color: var(--v2-background-bg-layer-02);
     background-image: linear-gradient(
       90deg,
       var(--v2-overlay-simple-overlay-hover) 0%,
