@@ -5,11 +5,19 @@ import { COMMIT_FORMAT, parseCommitRecords, parseRefLines } from "./parse"
 
 export type GitRunner = (args: readonly string[], cwd: string) => Promise<{ exitCode: number; stdout: string; stderr: string }>
 
+/**
+ * current = checked-out branch only
+ * local = every local branch (good default for forks)
+ * all = local + remotes/tags (can be huge on upstream forks)
+ */
+export type GitGraphScope = "current" | "local" | "all"
+
 export type LocalGitSourceOptions = {
   readonly worktree: string
   readonly run: GitRunner
   readonly watch?: (worktree: string, onChange: () => void) => () => void
   readonly maxCommits?: number
+  readonly scope?: GitGraphScope
 }
 
 export function createLocalGitSource(options: LocalGitSourceOptions): GitGraphSource {
@@ -61,7 +69,20 @@ export function createLocalGitSource(options: LocalGitSourceOptions): GitGraphSo
   }
 }
 
+export function parseScope(value: string | null | undefined): GitGraphScope {
+  if (value === "current" || value === "all" || value === "local") return value
+  return "local"
+}
+
+export function parseMaxCommits(value: string | null | undefined) {
+  if (value == null || value === "" || value === "all") return
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return
+  return Math.floor(parsed)
+}
+
 async function readRepository(options: LocalGitSourceOptions): Promise<GitGraphSnapshot> {
+  const scope = options.scope ?? "local"
   const root = await options.run(["rev-parse", "--show-toplevel"], options.worktree)
   if (root.exitCode !== 0) {
     return emptySnapshot({
@@ -90,11 +111,17 @@ async function readRepository(options: LocalGitSourceOptions): Promise<GitGraphS
     })
   }
 
-  const max = options.maxCommits ?? 5000
-  const log = await options.run(
-    ["log", `--max-count=${max}`, `--format=${COMMIT_FORMAT}%x1e`, "--date-order", "--all"],
-    options.worktree,
-  )
+  const logArgs = [
+    "log",
+    `--max-count=${options.maxCommits ?? -1}`,
+    `--format=${COMMIT_FORMAT}%x1e`,
+    "--date-order",
+  ]
+  if (scope === "all") logArgs.push("--all")
+  if (scope === "local") logArgs.push("--branches")
+  if (scope === "current") logArgs.push("--first-parent", "HEAD")
+
+  const log = await options.run(logArgs, options.worktree)
   if (log.exitCode !== 0) {
     return emptySnapshot({
       worktree: options.worktree,
@@ -103,16 +130,22 @@ async function readRepository(options: LocalGitSourceOptions): Promise<GitGraphS
     })
   }
 
-  const refs = await options.run(
-    ["for-each-ref", "--format=%(objectname)%09%(refname)", "refs/heads", "refs/tags", "refs/remotes", "refs/stash"],
-    options.worktree,
+  const commits = parseCommitRecords(log.stdout).map((commit) =>
+    scope === "current" && commit.parents.length > 1 ? { ...commit, parents: commit.parents.slice(0, 1) } : commit,
   )
 
-  const commits = parseCommitRecords(log.stdout)
-  const parsedRefs = refs.exitCode === 0 ? parseRefLines(refs.stdout) : []
-  if (branch) {
-    parsedRefs.push({ name: branch, kind: "local", commitID })
-  }
+  const refs =
+    scope === "all"
+      ? await options.run(
+          ["for-each-ref", "--format=%(objectname)%09%(refname)", "refs/heads", "refs/tags", "refs/remotes", "refs/stash"],
+          options.worktree,
+        )
+      : scope === "local"
+        ? await options.run(["for-each-ref", "--format=%(objectname)%09%(refname)", "refs/heads"], options.worktree)
+        : { exitCode: 0, stdout: "", stderr: "" }
+
+  const parsedRefs = (scope === "all" || scope === "local") && refs.exitCode === 0 ? parseRefLines(refs.stdout) : []
+  if (branch) parsedRefs.push({ name: branch, kind: "local", commitID })
   parsedRefs.push({ name: "HEAD", kind: "head", commitID })
 
   return normalizeSnapshot({
@@ -137,7 +170,9 @@ function uniqueRefs(refs: ReturnType<typeof parseRefLines>) {
 }
 
 export async function bunGitRunner(args: readonly string[], cwd: string) {
-  const proc = Bun.spawn(["git", "--no-optional-locks", ...args], {
+  const proc = Bun.spawn(
+    ["git", "--no-pager", "--no-optional-locks", "-c", "alias.log=", "-c", "log.maxCount=-1", ...args],
+    {
     cwd,
     stdout: "pipe",
     stderr: "pipe",

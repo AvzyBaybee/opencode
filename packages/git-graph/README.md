@@ -12,18 +12,27 @@ bun dev
 
 Open [http://127.0.0.1:5199](http://127.0.0.1:5199).
 
-Optional repo hint:
+Paste a real repository folder path, for example:
 
-```powershell
-$env:GIT_GRAPH_REPO="C:\path\to\repo"
-bun dev
-# or
-bun dev -- C:\path\to\repo
+```text
+C:\Users\Ava\Documents\Scripts\Javascript\Custom OpenCode
 ```
 
-Then open `http://127.0.0.1:5199/?repo=C:%5Cpath%5Cto%5Crepo`.
+Then press Enter / Open. The graph auto-refreshes when Git changes.
 
-Use **Open sample repository** for the built-in `fixture:branched` graph without a real repo.
+By default it shows **all local branches** (for this fork: `Custom` + `Official`) with the **full history**. Use the header dropdown to switch:
+
+- **All local branches** — useful fork view without ~1200 `upstream/*` remotes
+- **Current branch only** — one straight line
+- **Local + remotes** — everything (can get wide/laggy)
+
+Restart `bun dev` after changing the Git loader — the API process does not hot-reload. Env overrides still work if you want them:
+
+```powershell
+$env:GIT_GRAPH_SCOPE="all"          # current | local | all
+$env:GIT_GRAPH_MAX_COMMITS="400"    # optional cap; omit for all backups
+bun dev
+```
 
 ## What this is
 

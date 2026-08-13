@@ -1,4 +1,5 @@
-import type { GraphLayout, GraphPoint, LaidOutCommit } from "../layout"
+import type { CommitLabel, GraphLayout, GraphPoint, LaidOutCommit, StemRun } from "../layout"
+import { colorForLane } from "./lane-color"
 
 export type Camera = {
   readonly x: number
@@ -16,7 +17,12 @@ export type ThemeColors = {
   readonly labelMuted: string
   readonly pillFill: string
   readonly pillText: string
+  readonly pillLocal: string
+  readonly pillRemote: string
+  readonly pillTag: string
   readonly focus: string
+  readonly cardFill: string
+  readonly cardBorder: string
 }
 
 export const DEFAULT_THEME: ThemeColors = {
@@ -29,7 +35,12 @@ export const DEFAULT_THEME: ThemeColors = {
   labelMuted: "#9a9a9a",
   pillFill: "#2a2a2a",
   pillText: "#d2d2d2",
+  pillLocal: "#6b8cff",
+  pillRemote: "#7a7a7a",
+  pillTag: "#c4a35a",
   focus: "#6b8cff",
+  cardFill: "rgba(30,30,30,0.96)",
+  cardBorder: "#2f2f2f",
 }
 
 export function createCamera(partial?: Partial<Camera>): Camera {
@@ -61,7 +72,12 @@ export function drawGraph(input: {
   width: number
   height: number
   selectedID?: string
+  hoveringID?: string
+  hoveringEdgeKey?: string
+  selectedEdgeKey?: string
   headID?: string
+  detached?: boolean
+  light?: boolean
   colors?: ThemeColors
   dpr?: number
 }) {
@@ -78,48 +94,153 @@ export function drawGraph(input: {
   ctx.translate(-input.camera.x, -input.camera.y)
 
   const view = visibleBounds(input.camera, input.width, input.height)
-  ctx.lineWidth = 2 / input.camera.zoom
-  ctx.strokeStyle = colors.edge
+  const zoom = input.camera.zoom
+  const light = Boolean(input.light)
+  const stems = { verticals: input.layout.verticals, horizontals: input.layout.horizontals }
+  const activeKey = input.hoveringEdgeKey ?? input.selectedEdgeKey
+  const visibleCommits = input.layout.commits.filter((commit) => cardVisible(commit, view))
   for (const edge of input.layout.edges) {
-    if (!edgeVisible(edge.fromPoint, edge.toPoint, view)) continue
-    ctx.beginPath()
-    ctx.moveTo(edge.fromPoint.x, edge.fromPoint.y)
-    const midY = (edge.fromPoint.y + edge.toPoint.y) / 2
-    ctx.bezierCurveTo(edge.fromPoint.x, midY, edge.toPoint.x, midY, edge.toPoint.x, edge.toPoint.y)
-    ctx.stroke()
+    if (!polylineVisible(edge.points, view)) continue
+    if (edge.key === activeKey) continue
+    ctx.strokeStyle = colorForLane(edge.colorLane, light)
+    ctx.lineWidth = 2 / zoom
+    ctx.lineJoin = "round"
+    ctx.lineCap = "round"
+    strokePolyline(ctx, edge.points)
+    drawChevrons(ctx, edge.points, zoom, visibleCommits, stems)
   }
 
-  for (const commit of input.layout.commits) {
-    if (!pointVisible(commit.x, commit.y, view, 40)) continue
-    drawCommit(ctx, commit, colors, input.selectedID === commit.id, input.headID === commit.id, input.camera.zoom)
+  const active = input.layout.edges.find((edge) => edge.key === activeKey)
+  if (active && polylineVisible(active.points, view)) {
+    ctx.strokeStyle = colors.focus
+    ctx.lineWidth = 3.4 / zoom
+    ctx.lineJoin = "round"
+    ctx.lineCap = "round"
+    strokePolyline(ctx, active.points)
+    drawChevrons(ctx, active.points, zoom, visibleCommits, stems)
   }
 
-  for (const ref of input.layout.refs) {
-    if (!pointVisible(ref.x, ref.y, view, 80)) continue
-    drawPill(ctx, ref.x, ref.y, ref.name, colors, input.camera.zoom)
+  for (const commit of visibleCommits) {
+    drawCommit(
+      ctx,
+      commit,
+      colors,
+      input.selectedID === commit.id,
+      input.hoveringID === commit.id,
+      input.headID === commit.id,
+      Boolean(input.detached && input.headID === commit.id),
+      zoom,
+      colorForLane(commit.lane, light),
+    )
+  }
+
+  for (const commit of visibleCommits) {
+    if (commit.labels.length === 0) continue
+    drawLabels(ctx, commit, colors, colorForLane(commit.lane, light))
   }
 
   ctx.restore()
 }
 
 export function hitTestCommit(layout: GraphLayout, worldX: number, worldY: number) {
-  let best: LaidOutCommit | undefined
-  let bestDist = 18
   for (const commit of layout.commits) {
-    const labelLeft = commit.x + 14
-    const labelRight = labelLeft + Math.min(240, Math.max(40, commit.label.length * 7))
-    const inLabel =
-      worldX >= labelLeft && worldX <= labelRight && worldY >= commit.y - 11 && worldY <= commit.y + 11
-    const dx = commit.x - worldX
-    const dy = commit.y - worldY
-    const dist = Math.hypot(dx, dy)
-    if (inLabel) return commit
-    if (dist < bestDist) {
-      best = commit
-      bestDist = dist
+    if (
+      worldX >= commit.cardLeft &&
+      worldX <= commit.cardLeft + commit.cardWidth &&
+      worldY >= commit.cardTop &&
+      worldY <= commit.cardTop + commit.cardHeight
+    ) {
+      return commit
     }
   }
-  return best
+}
+
+export function hitTestEdge(layout: GraphLayout, worldX: number, worldY: number, threshold: number) {
+  let best: { edge: (typeof layout.edges)[number]; distance: number } | undefined
+  for (const edge of layout.edges) {
+    if (!edge.selectable) continue
+    if (!polylineNear(edge.points, worldX, worldY, threshold + 8)) continue
+    const distance = distanceToPolyline(worldX, worldY, edge.points)
+    if (distance > threshold) continue
+    if (best && best.distance <= distance) continue
+    best = { edge, distance }
+  }
+  return best?.edge
+}
+
+const CHEVRON_PITCH = 36
+const CHEVRON_CLEAR = 8
+
+/** Fixed pitch along the segment. Drop a mark only if it lands on a real crossing. */
+export function chevronPointsAlong(start: GraphPoint, end: GraphPoint, crossings: readonly number[] = []) {
+  return chevronMarksOnPolyline([start, end], axisRuns(crossings, start, end)).map((mark) => mark.point)
+}
+
+function axisRuns(crossings: readonly number[], start: GraphPoint, end: GraphPoint): { verticals: StemRun[]; horizontals: StemRun[] } {
+  const horizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
+  if (horizontal) {
+    return {
+      verticals: crossings.map((at) => ({
+        at,
+        from: Math.min(start.y, end.y) - 40,
+        to: Math.max(start.y, end.y) + 40,
+      })),
+      horizontals: [],
+    }
+  }
+  return {
+    verticals: [],
+    horizontals: crossings.map((at) => ({
+      at,
+      from: Math.min(start.x, end.x) - 40,
+      to: Math.max(start.x, end.x) + 40,
+    })),
+  }
+}
+
+function chevronMarksOnPolyline(
+  points: readonly GraphPoint[],
+  stems: { verticals: readonly StemRun[]; horizontals: readonly StemRun[] },
+) {
+  const marks: { point: GraphPoint; angle: number }[] = []
+  let traveled = 0
+  let next = CHEVRON_PITCH / 2
+  for (let index = 0; index < points.length - 1; index++) {
+    const start = points[index]!
+    const end = points[index + 1]!
+    const dx = end.x - start.x
+    const dy = end.y - start.y
+    const length = Math.hypot(dx, dy)
+    if (length < 1) continue
+    const horizontal = Math.abs(dx) >= Math.abs(dy)
+    const angle = Math.atan2(dy, dx)
+    while (next < traveled + length) {
+      const along = next - traveled
+      if (along >= 1 && length - along >= 1) {
+        const t = along / length
+        const point = { x: start.x + dx * t, y: start.y + dy * t }
+        if (!blockedByStem(point, horizontal, stems)) marks.push({ point, angle })
+      }
+      next += CHEVRON_PITCH
+    }
+    traveled += length
+  }
+  return marks
+}
+
+function blockedByStem(
+  point: GraphPoint,
+  horizontal: boolean,
+  stems: { verticals: readonly StemRun[]; horizontals: readonly StemRun[] },
+) {
+  if (horizontal) {
+    return stems.verticals.some(
+      (run) => Math.abs(run.at - point.x) < CHEVRON_CLEAR && point.y > run.from && point.y < run.to,
+    )
+  }
+  return stems.horizontals.some(
+    (run) => Math.abs(run.at - point.y) < CHEVRON_CLEAR && point.x > run.from && point.x < run.to,
+  )
 }
 
 function drawCommit(
@@ -127,64 +248,153 @@ function drawCommit(
   commit: LaidOutCommit,
   colors: ThemeColors,
   selected: boolean,
+  hovering: boolean,
   isHead: boolean,
+  detachedHere: boolean,
   zoom: number,
+  laneColor: string,
 ) {
-  const radius = 5
-  ctx.beginPath()
-  ctx.arc(commit.x, commit.y, radius, 0, Math.PI * 2)
-  if (isHead) {
-    ctx.strokeStyle = colors.nodeHead
-    ctx.lineWidth = 2 / zoom
-    ctx.stroke()
-  } else {
-    ctx.fillStyle = selected ? colors.nodeSelected : colors.node
-    ctx.fill()
-  }
-  if (selected) {
-    ctx.beginPath()
-    ctx.arc(commit.x, commit.y, radius + 3, 0, Math.PI * 2)
-    ctx.strokeStyle = colors.focus
-    ctx.lineWidth = 1.5 / zoom
-    ctx.stroke()
+  roundRect(ctx, commit.cardLeft, commit.cardTop, commit.cardWidth, commit.cardHeight, 10)
+  ctx.fillStyle = colors.cardFill
+  ctx.fill()
+  ctx.strokeStyle = selected ? colors.focus : hovering ? colors.nodeSelected : isHead ? laneColor : colors.cardBorder
+  ctx.lineWidth = (selected ? 2 : hovering || isHead ? 2.4 : 1) / zoom
+  ctx.stroke()
+
+  const fontSize = 12
+  const mutedSize = 10
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+
+  if (detachedHere) {
+    ctx.font = `${mutedSize}px Inter, ui-sans-serif, system-ui, sans-serif`
+    ctx.fillStyle = colors.labelMuted
+    ctx.fillText("you are here · no branch name", commit.x, commit.cardTop - 22)
   }
 
-  const labelX = commit.x + 14
-  const maxWidth = 240
-  ctx.font = `${12 / Math.max(zoom, 0.75)}px Inter, ui-sans-serif, system-ui, sans-serif`
-  ctx.textBaseline = "middle"
-  const text = truncate(ctx, commit.label, maxWidth)
-  const metrics = ctx.measureText(text)
-  const padX = 8
-  const w = metrics.width + padX * 2
-  const h = 22
-  roundRect(ctx, labelX, commit.y - h / 2, w, h, 10)
-  ctx.fillStyle = "rgba(30,30,30,0.92)"
-  ctx.fill()
+  ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui, sans-serif`
   ctx.fillStyle = colors.label
-  ctx.fillText(text, labelX + padX, commit.y)
+  ctx.fillText(commit.lines[0] ?? "", commit.x, commit.y)
+  ctx.textAlign = "left"
+  ctx.textBaseline = "top"
 }
 
-function drawPill(
+function drawLabels(ctx: CanvasRenderingContext2D, commit: LaidOutCommit, colors: ThemeColors, laneColor: string) {
+  const pillH = 16
+  const gap = 6
+  const pad = 7
+  const textY = commit.cardTop - 8 - pillH
+  ctx.font = `10px Inter, ui-sans-serif, system-ui, sans-serif`
+  const widths = commit.labels.map((label) => ctx.measureText(label.name).width + pad * 2)
+  const total = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, commit.labels.length - 1)
+  let x = commit.x - total / 2
+  for (let index = 0; index < commit.labels.length; index++) {
+    const label = commit.labels[index]!
+    const width = widths[index]!
+    roundRect(ctx, x, textY, width, pillH, 8)
+    ctx.fillStyle = pillFill(label, colors, laneColor)
+    ctx.fill()
+    ctx.fillStyle = pillText(label, colors)
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText(label.name, x + width / 2, textY + pillH / 2)
+    x += width + gap
+  }
+  ctx.textBaseline = "top"
+}
+
+function pillFill(label: CommitLabel, colors: ThemeColors, laneColor: string) {
+  if (label.kind === "local") return laneColor
+  if (label.kind === "tag") return colors.pillTag
+  return colors.pillFill
+}
+
+function pillText(label: CommitLabel, colors: ThemeColors) {
+  if (label.kind === "local") return "#f4f6ff"
+  if (label.kind === "tag") return "#1a1408"
+  return colors.pillRemote
+}
+
+function strokePolyline(ctx: CanvasRenderingContext2D, points: readonly GraphPoint[]) {
+  const first = points[0]
+  if (!first) return
+  ctx.beginPath()
+  ctx.moveTo(first.x, first.y)
+  for (const point of points.slice(1)) ctx.lineTo(point.x, point.y)
+  ctx.stroke()
+}
+
+function drawChevrons(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  text: string,
-  colors: ThemeColors,
+  points: readonly GraphPoint[],
   zoom: number,
+  commits: readonly LaidOutCommit[],
+  stems: { verticals: readonly StemRun[]; horizontals: readonly StemRun[] },
 ) {
-  ctx.font = `${10 / Math.max(zoom, 0.75)}px Inter, ui-sans-serif, system-ui, sans-serif`
-  ctx.textBaseline = "middle"
-  const label = truncate(ctx, text, 120)
-  const metrics = ctx.measureText(label)
-  const padX = 7
-  const h = 18
-  const w = metrics.width + padX * 2
-  roundRect(ctx, x, y - h / 2, w, h, 9)
-  ctx.fillStyle = colors.pillFill
-  ctx.fill()
-  ctx.fillStyle = colors.pillText
-  ctx.fillText(label, x + padX, y)
+  const size = 3.5
+  ctx.lineWidth = 1.25 / zoom
+  ctx.lineCap = "butt"
+  ctx.lineJoin = "miter"
+  for (const mark of chevronMarksOnPolyline(points, stems)) {
+    if (insideCard(mark.point, commits, 2)) continue
+    drawChevron(ctx, mark.point.x, mark.point.y, mark.angle, size)
+  }
+}
+
+function polylineNear(points: readonly GraphPoint[], x: number, y: number, pad: number) {
+  if (points.length === 0) return false
+  let minX = points[0]!.x
+  let maxX = points[0]!.x
+  let minY = points[0]!.y
+  let maxY = points[0]!.y
+  for (const point of points) {
+    minX = Math.min(minX, point.x)
+    maxX = Math.max(maxX, point.x)
+    minY = Math.min(minY, point.y)
+    maxY = Math.max(maxY, point.y)
+  }
+  return x >= minX - pad && x <= maxX + pad && y >= minY - pad && y <= maxY + pad
+}
+
+function distanceToPolyline(x: number, y: number, points: readonly GraphPoint[]) {
+  let best = Infinity
+  for (let index = 0; index < points.length - 1; index++) {
+    const start = points[index]!
+    const end = points[index + 1]!
+    best = Math.min(best, distanceToSegment(x, y, start.x, start.y, end.x, end.y))
+  }
+  return best
+}
+
+function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+  const dx = bx - ax
+  const dy = by - ay
+  const length = dx * dx + dy * dy
+  if (length < 1) return Math.hypot(px - ax, py - ay)
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / length))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+function insideCard(point: GraphPoint, commits: readonly LaidOutCommit[], pad = 6) {
+  return commits.some(
+    (commit) =>
+      point.x >= commit.cardLeft - pad &&
+      point.x <= commit.cardLeft + commit.cardWidth + pad &&
+      point.y >= commit.cardTop - pad &&
+      point.y <= commit.cardTop + commit.cardHeight + pad,
+  )
+}
+
+function drawChevron(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number) {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.rotate(angle)
+  ctx.beginPath()
+  ctx.moveTo(-size, -size * 0.7)
+  ctx.lineTo(0, 0)
+  ctx.lineTo(-size, size * 0.7)
+  ctx.stroke()
+  ctx.restore()
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -198,15 +408,6 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
-function truncate(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
-  if (ctx.measureText(text).width <= maxWidth) return text
-  let value = text
-  while (value.length > 1 && ctx.measureText(`${value}…`).width > maxWidth) {
-    value = value.slice(0, -1)
-  }
-  return `${value}…`
-}
-
 function visibleBounds(camera: Camera, width: number, height: number) {
   const topLeft = screenToWorld(camera, 0, 0)
   const bottomRight = screenToWorld(camera, width, height)
@@ -218,14 +419,26 @@ function visibleBounds(camera: Camera, width: number, height: number) {
   }
 }
 
-function pointVisible(x: number, y: number, view: ReturnType<typeof visibleBounds>, pad: number) {
-  return x >= view.left - pad && x <= view.right + pad && y >= view.top - pad && y <= view.bottom + pad
+function cardVisible(commit: LaidOutCommit, view: ReturnType<typeof visibleBounds>) {
+  return (
+    commit.cardLeft + commit.cardWidth >= view.left &&
+    commit.cardLeft <= view.right &&
+    commit.cardTop + commit.cardHeight >= view.top &&
+    commit.cardTop <= view.bottom
+  )
 }
 
-function edgeVisible(a: GraphPoint, b: GraphPoint, view: ReturnType<typeof visibleBounds>) {
-  const minX = Math.min(a.x, b.x)
-  const maxX = Math.max(a.x, b.x)
-  const minY = Math.min(a.y, b.y)
-  const maxY = Math.max(a.y, b.y)
+function polylineVisible(points: readonly GraphPoint[], view: ReturnType<typeof visibleBounds>) {
+  if (points.length === 0) return false
+  let minX = points[0]!.x
+  let maxX = points[0]!.x
+  let minY = points[0]!.y
+  let maxY = points[0]!.y
+  for (const point of points) {
+    minX = Math.min(minX, point.x)
+    maxX = Math.max(maxX, point.x)
+    minY = Math.min(minY, point.y)
+    maxY = Math.max(maxY, point.y)
+  }
   return maxX >= view.left && minX <= view.right && maxY >= view.top && minY <= view.bottom
 }

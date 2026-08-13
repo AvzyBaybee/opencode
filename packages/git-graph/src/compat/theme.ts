@@ -56,16 +56,77 @@ export const themeCss = `
   outline-offset: 1px;
 }
 
+.git-graph-button[data-kind="danger"] {
+  border-color: #8a3d3d;
+}
+
+.git-graph-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .git-graph-tooltip {
-  max-width: min(360px, 70vw);
-  padding: 6px 8px;
+  pointer-events: auto;
+  width: min(320px, calc(100% - 24px));
+  padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--git-graph-border);
   background: var(--git-graph-panel);
   color: var(--git-graph-text);
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 1.35;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.git-graph-tooltip-name {
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.git-graph-tooltip-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.git-graph-tooltip-actions .git-graph-button {
+  flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+}
+
+.git-graph-path-pop {
+  width: 220px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--git-graph-border);
+  background: var(--git-graph-panel);
+  color: var(--git-graph-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.git-graph-backup-bubble {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--git-graph-border);
+  background: var(--git-graph-bg);
+  color: var(--git-graph-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  cursor: pointer;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.git-graph-backup-bubble:hover,
+.git-graph-backup-bubble[data-active="true"] {
+  border-color: var(--git-graph-accent);
 }
 
 .git-graph-panel-shell {
@@ -91,7 +152,12 @@ export function canvasColors(scheme: "light" | "dark") {
       labelMuted: "#6b6b6b",
       pillFill: "#ececec",
       pillText: "#333333",
+      pillLocal: "#3b5bdb",
+      pillRemote: "#6b6b6b",
+      pillTag: "#b0892e",
       focus: "#3b5bdb",
+      cardFill: "rgba(255,255,255,0.96)",
+      cardBorder: "#e4e4e4",
     }
   }
   return {
@@ -104,6 +170,11 @@ export function canvasColors(scheme: "light" | "dark") {
     labelMuted: "#9a9a9a",
     pillFill: "#2a2a2a",
     pillText: "#d2d2d2",
+    pillLocal: "#6b8cff",
+    pillRemote: "#9a9a9a",
+    pillTag: "#c4a35a",
     focus: "#6b8cff",
+    cardFill: "rgba(30,30,30,0.96)",
+    cardBorder: "#2f2f2f",
   }
 }
