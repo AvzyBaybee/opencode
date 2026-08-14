@@ -183,6 +183,13 @@
   gap: 6px;
 }
 
+.ava-agent-form-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .ava-agent-form-heading,
 .ava-agent-field-label {
   font-size: 12px;
@@ -228,7 +235,103 @@
 }
 
 .ava-agent-form-switches {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ava-agent-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ava-agent-description-scroll {
+  max-height: 160px;
+}
+
+.ava-agent-description-scroll .scroll-view__viewport {
+  max-height: 160px;
+}
+
+.ava-agent-description {
+  min-height: 28px;
+  line-height: 20px;
+  overflow: hidden;
+  resize: none;
+}
+
+.ava-agent-color {
+  display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+.ava-agent-color-swatch {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--v2-border-border-weak, var(--border-weak-base));
+  border-radius: 6px;
+}
+
+.ava-agent-color-swatch input {
+  position: absolute;
+  inset: 0;
+  width: 150%;
+  height: 150%;
+  transform: translate(-25%, -25%);
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.ava-agent-color-value {
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--v2-text-text-weak, var(--text-weak));
+}
+
+.ava-agent-model-picker {
+  position: relative;
+}
+
+.ava-agent-model-trigger {
+  display: flex;
+  align-items: center;
+  text-align: start;
+  cursor: pointer;
+}
+
+.ava-agent-model-menu {
+  position: absolute;
+  z-index: 6;
+  inset-inline: 0;
+  top: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  max-height: none;
+  background: var(--v2-background-bg-base, var(--background-base));
+}
+
+.ava-agent-picker-list {
+  max-height: 180px;
+}
+
+.ava-agent-picker-item[data-active="true"] {
+  background: color-mix(in srgb, #ffffff 9%, transparent);
+}
+
+.ava-agent-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .ava-agent-input {
@@ -304,6 +407,10 @@
 }
 
 .ava-agent-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
   padding: 6px 8px;
   border: 0;
   background: transparent;

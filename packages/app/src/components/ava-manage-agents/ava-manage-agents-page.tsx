@@ -18,10 +18,9 @@ import { AvaFileContextMenu, useAvaFileContextMenu } from "@/components/ava-side
 import { AvaAgentSettingsForm } from "./ava-agent-settings-form"
 import {
   exclusiveInstructionPaths,
-  instructionFolderGlob,
+  extractAgentPromptFiles,
   loadAgents,
   loadInstructions,
-  withInstructionGlob,
 } from "./ava-manage-agents-files"
 import {
   agentTemplate,
@@ -75,7 +74,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     },
     { initialValue: [] },
   )
-  const [instructionDocs] = createResource(
+  const [instructionDocs, { refetch: refetchInstructions }] = createResource(
     () => `${project()}\0${config()}`,
     () => loadInstructions({ access, project: project(), config: config() }),
     { initialValue: [] as InstructionDocument[] },
@@ -101,10 +100,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     const raw = (await access.read?.(item.path)) ?? ""
     if (item.kind === "agent") {
       const parsed = parseAgentSettings(raw || agentTemplate(item.name))
-      parsed.settings.instructionPaths = exclusiveInstructionPaths(
-        parsed.settings.instructionPaths,
-        (instructionDocs.latest ?? []).map((doc) => doc.path),
-      )
+      parsed.settings.instructionPaths = exclusiveInstructionPaths(parsed.settings.instructionPaths)
       setStore({ ...parsed, documentMode: false, document: "", dirty: false })
       return
     }
@@ -124,16 +120,9 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
   const agentDocument = async () => {
     const settings = {
       ...store.settings,
-      instructionPaths: exclusiveInstructionPaths(
-        store.settings.instructionPaths,
-        (instructionDocs.latest ?? []).map((item) => item.path),
-      ),
+      instructionPaths: exclusiveInstructionPaths(store.settings.instructionPaths),
     }
-    return serializeAgentSettings(
-      settings,
-      await Promise.all(settings.instructionPaths.map(async (path) => (await access.read?.(path)) ?? "")),
-      store.body,
-    )
+    return serializeAgentSettings(settings, store.body)
   }
 
   const persist = async () => {
@@ -201,7 +190,6 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
           ? joinPath(project(), ".opencode", "instructions", `${slug}.md`)
           : joinPath(config(), "instructions", `${slug}.md`)
     await access.write(target, props.pane === "agents" ? agentTemplate(value) : instructionTemplate(value))
-    if (props.pane === "instructions") await ensureInstructionGlobs()
     await refetch()
     setStore({
       selected: documentId(props.pane === "agents" ? "agent" : "instruction", scope, target),
@@ -219,15 +207,19 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     await serverSDK().client.global.config.update({ config: { instructions: next(current) } })
   }
 
-  const ensureInstructionGlobs = async () => {
-    await updateInstructions("project", (current) => withInstructionGlob(current, instructionFolderGlob("project", project())))
-    await updateInstructions("global", (current) => withInstructionGlob(current, instructionFolderGlob("global", config())))
-  }
-
   createEffect(
     on(
       () => `${project()}\0${config()}`,
-      () => void ensureInstructionGlobs(),
+      () => {
+        void extractAgentPromptFiles({ access, project: project(), config: config() }).then(async (changed) => {
+          if (!changed) return
+          await refetch()
+          await refetchInstructions()
+          const id = store.selected
+          if (!id) return
+          await loadSelected((docs.latest ?? []).find((item) => item.id === id))
+        })
+      },
     ),
   )
 
@@ -243,7 +235,6 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     })
     if (item.kind === "instruction" && item.configPath) {
       await updateInstructions(item.scope, (current) => current.filter((value) => value !== item.configPath))
-      await ensureInstructionGlobs()
     }
     if (store.selected === item.id) setStore("selected", undefined)
     await refetch()

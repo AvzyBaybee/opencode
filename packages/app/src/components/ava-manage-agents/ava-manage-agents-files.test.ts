@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
   exclusiveInstructionPaths,
+  extractAgentPromptFiles,
+  extractedInstructionHeading,
   instructionFolderGlob,
   isAgentsMdPath,
   loadInstructions,
@@ -36,13 +38,47 @@ describe("ava manage agents files", () => {
     expect(withInstructionGlob([glob], glob)).toEqual([glob])
   })
 
-  test("keeps only agent-exclusive instruction paths", () => {
+  test("keeps attached catalog instruction paths and drops AGENTS.md", () => {
     expect(isAgentsMdPath("/c/AGENTS.md")).toBe(true)
     expect(
-      exclusiveInstructionPaths(
-        ["/c/AGENTS.md", "/c/instructions/voice.md", "/tmp/only-this-agent.md"],
-        ["/c/instructions/voice.md"],
-      ),
-    ).toEqual(["/tmp/only-this-agent.md"])
+      exclusiveInstructionPaths(["/c/AGENTS.md", "/c/instructions/voice.md", "/tmp/only-this-agent.md"]),
+    ).toEqual(["/c/instructions/voice.md", "/tmp/only-this-agent.md"])
+  })
+
+  test("extracts agent bodies into instruction files and clears the agent body", async () => {
+    const files = new Map<string, string>([
+      [
+        "/p/.opencode/agents/builder.md",
+        `---
+mode: primary
+color: "#4C6FFF"
+---
+
+Build things with care.
+`,
+      ],
+    ])
+    const access = {
+      list: async (directory: string) => {
+        if (directory.replace(/\\/g, "/") === "/p/.opencode/agents") {
+          return [{ name: "builder.md", path: "/p/.opencode/agents/builder.md", type: "file" as const }]
+        }
+        return []
+      },
+      read: async (path: string) => files.get(path.replace(/\\/g, "/")) ?? null,
+      write: async (path: string, content: string) => {
+        files.set(path.replace(/\\/g, "/"), content)
+      },
+    }
+    expect(extractedInstructionHeading("Builder")).toBe("Builder Instructions")
+    expect(await extractAgentPromptFiles({ access, project: "/p", config: "/c" })).toBe(true)
+    const instruction = files.get("/p/.opencode/instructions/builder-instructions.md")
+    expect(instruction).toContain("# Builder Instructions")
+    expect(instruction).toContain("Build things with care.")
+    const agent = files.get("/p/.opencode/agents/builder.md") ?? ""
+    expect(agent).toContain("/p/.opencode/instructions/builder-instructions.md")
+    expect(agent).toContain('color: "#4C6FFF"')
+    expect(agent).not.toContain("Build things with care.")
+    expect(await extractAgentPromptFiles({ access, project: "/p", config: "/c" })).toBe(false)
   })
 })

@@ -98,7 +98,7 @@ export function parseAgentSettings(raw: string) {
   return { settings, body }
 }
 
-export function serializeAgentSettings(settings: AgentSettings, instructionBodies: string[], fallbackBody = "") {
+export function serializeAgentSettings(settings: AgentSettings, fallbackBody = "") {
   const permission: Record<string, unknown> = {}
   for (const tool of PERMISSION_TOOLS) {
     const value = settings.permissions[tool]
@@ -134,8 +134,7 @@ export function serializeAgentSettings(settings: AgentSettings, instructionBodie
   if (Object.keys(permission).length > 0) data.permission = permission
   if (settings.reasoningEffort.trim()) data.options = { reasoningEffort: settings.reasoningEffort.trim() }
 
-  const attached = instructionBodies.map((item) => item.trim()).filter(Boolean).join("\n\n")
-  const body = settings.instructionPaths.length > 0 ? attached : fallbackBody.trim()
+  const body = settings.instructionPaths.length > 0 ? "" : fallbackBody.trim()
   const comments = exampleComments(settings)
   return `---\n${stringifyYaml(data)}${comments}---\n${body ? `\n${body}\n` : "\n"}`
 }

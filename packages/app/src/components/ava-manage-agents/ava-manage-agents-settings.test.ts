@@ -58,7 +58,7 @@ ignored body
         taskAgents: [],
         instructionPaths: ["/tmp/AGENTS.md"],
       },
-      ["# Project\n\nFollow the repo rules."],
+      "",
     )
     expect(raw).toContain("description: Build")
     expect(raw).toContain("mode: primary")
@@ -70,8 +70,9 @@ ignored body
     expect(raw).toContain("task: ask")
     expect(raw).toContain("reasoningEffort: medium")
     expect(raw).toContain("- /tmp/AGENTS.md")
-    expect(raw).toContain("Follow the repo rules.")
+    expect(raw).not.toContain("Follow the repo rules.")
     expect(parseAgentSettings(raw).settings.instructionPaths).toEqual(["/tmp/AGENTS.md"])
+    expect(parseAgentSettings(raw).body.trim()).toBe("")
   })
 
   test("keeps the existing prompt when no instruction files are attached", () => {
@@ -81,13 +82,13 @@ mode: primary
 
 Keep this prompt.
 `).settings
-    const raw = serializeAgentSettings(settings, [], "Keep this prompt.")
+    const raw = serializeAgentSettings(settings, "Keep this prompt.")
     expect(raw).toContain("Keep this prompt.")
     expect(raw).not.toContain("instructions:")
   })
 
   test("comments unset document keys so they can be filled in", () => {
-    const raw = serializeAgentSettings(emptyAgentSettings(), [], "")
+    const raw = serializeAgentSettings(emptyAgentSettings(), "")
     expect(raw).toContain("# color:")
     expect(raw).toContain("#   reasoningEffort:")
     expect(raw).toContain("#   webfetch: allow")

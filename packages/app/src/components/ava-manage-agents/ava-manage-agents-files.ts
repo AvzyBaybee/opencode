@@ -8,6 +8,7 @@ import {
   type AgentsScope,
   type InstructionDocument,
 } from "./ava-manage-agents-model"
+import { parseAgentSettings, serializeAgentSettings } from "./ava-manage-agents-settings"
 
 export type AgentsFileAccess = {
   list?: (path: string) => Promise<BrowseDirectoryEntry[]>
@@ -82,9 +83,52 @@ export function isAgentsMdPath(path: string) {
   return /(?:^|[\\/])AGENTS\.md$/i.test(path)
 }
 
-export function exclusiveInstructionPaths(paths: string[], ambient: string[]) {
-  const locked = new Set(ambient.map(normalizePath))
-  return paths.filter((path) => !locked.has(normalizePath(path)) && !isAgentsMdPath(path))
+export function exclusiveInstructionPaths(paths: string[]) {
+  const seen = new Set<string>()
+  return paths.filter((path) => {
+    if (isAgentsMdPath(path)) return false
+    const key = normalizePath(path)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+export function extractedInstructionHeading(name: string) {
+  return `${name} Instructions`
+}
+
+export async function extractAgentPromptFiles(input: {
+  access: AgentsFileAccess
+  project: string
+  config: string
+}) {
+  if (!input.access.write || !input.access.read) return false
+  const agents = await loadAgents(input)
+  const results = await Promise.all(agents.map((agent) => extractOneAgent(input, agent)))
+  return results.some(Boolean)
+}
+
+async function extractOneAgent(
+  input: { access: AgentsFileAccess; project: string; config: string },
+  agent: AgentDocument,
+) {
+  const raw = (await input.access.read?.(agent.path)) ?? ""
+  const parsed = parseAgentSettings(raw)
+  const body = parsed.body.trim()
+  if (!body) return false
+  const folder =
+    agent.scope === "project"
+      ? joinPath(input.project, ".opencode", "instructions")
+      : joinPath(input.config, "instructions")
+  const dest = joinPath(folder, `${agent.slug}-instructions.md`)
+  const existing = await input.access.read?.(dest)
+  if (existing !== null && existing !== undefined) return false
+  const content = `# ${extractedInstructionHeading(agent.name)}\n\n${body}\n`
+  await input.access.write?.(dest, content)
+  parsed.settings.instructionPaths = exclusiveInstructionPaths([...parsed.settings.instructionPaths, dest])
+  await input.access.write?.(agent.path, serializeAgentSettings(parsed.settings, ""))
+  return true
 }
 
 export function instructionConfigPath(root: string, absolute: string) {

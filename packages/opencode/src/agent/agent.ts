@@ -14,6 +14,7 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import { loadAttachedInstructionPrompt } from "./agent-instructions"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
@@ -309,13 +310,26 @@ const layer = Layer.effect(
           )
         }
 
+        const hydrate = (item: Info) =>
+          Effect.promise(async () => {
+            const prompt = await loadAttachedInstructionPrompt({
+              prompt: item.prompt,
+              options: item.options,
+              directory: ctx.directory,
+            })
+            if (prompt === item.prompt) return item
+            return { ...item, prompt }
+          })
+
         const get = Effect.fnUntraced(function* (agent: string) {
-          return agents[agent]
+          const item = agents[agent]
+          if (!item) return item
+          return yield* hydrate(item)
         })
 
         const list = Effect.fnUntraced(function* () {
           const cfg = yield* config.get()
-          return pipe(
+          const items = pipe(
             agents,
             values(),
             sortBy(
@@ -323,6 +337,7 @@ const layer = Layer.effect(
               [(x) => x.name, "asc"],
             ),
           )
+          return yield* Effect.forEach(items, (item) => hydrate(item))
         })
 
         const defaultInfo = Effect.fnUntraced(function* () {
@@ -332,11 +347,11 @@ const layer = Layer.effect(
             if (!agent) throw new Error(`default agent "${c.default_agent}" not found`)
             if (agent.mode === "subagent") throw new Error(`default agent "${c.default_agent}" is a subagent`)
             if (agent.hidden === true) throw new Error(`default agent "${c.default_agent}" is hidden`)
-            return agent
+            return yield* hydrate(agent)
           }
           const visible = Object.values(agents).find((a) => a.mode !== "subagent" && a.hidden !== true)
           if (!visible) throw new Error("no primary visible agent found")
-          return visible
+          return yield* hydrate(visible)
         })
 
         const defaultAgent = Effect.fnUntraced(function* () {

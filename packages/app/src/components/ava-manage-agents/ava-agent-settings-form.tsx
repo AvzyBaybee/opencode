@@ -1,9 +1,11 @@
-import { For, Show, createMemo, type JSX } from "solid-js"
+import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js"
 import { Icon } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
 import { useLanguage } from "@/context/language"
+import { AvaAgentModelPicker, AvaAgentVariantPicker } from "./ava-agent-model-picker"
+import { isAgentsMdPath } from "./ava-manage-agents-files"
 import type { InstructionDocument } from "./ava-manage-agents-model"
 import {
   PERMISSION_TOOLS,
@@ -16,6 +18,7 @@ import {
 const MODES: AgentMode[] = ["primary", "subagent", "all"]
 const ACTIONS: PermissionAction[] = ["allow", "ask", "deny"]
 const EFFORTS = ["", "minimal", "low", "medium", "high"]
+const HEX = /^#[0-9a-fA-F]{6}$/
 
 export function AvaAgentSettingsForm(props: {
   settings: AgentSettings
@@ -24,48 +27,71 @@ export function AvaAgentSettingsForm(props: {
   onChange: (settings: AgentSettings) => void
 }) {
   const language = useLanguage()
-  const ambient = createMemo(() =>
-    [...props.instructions].sort((left, right) => {
-      if (left.scope === right.scope) return 0
-      return left.scope === "global" ? -1 : 1
-    }),
+  const [addOpen, setAddOpen] = createSignal(false)
+  const [addQuery, setAddQuery] = createSignal("")
+  const attachedPaths = createMemo(
+    () => new Set(props.settings.instructionPaths.filter((path) => !isAgentsMdPath(path)).map(normalizePath)),
   )
-  const ambientPaths = createMemo(() => new Set(ambient().map((item) => item.path)))
-  const exclusive = createMemo(() =>
-    props.settings.instructionPaths.filter((path) => !ambientPaths().has(path) && !/(?:^|[\\/])AGENTS\.md$/i.test(path)),
-  )
-  const exclusiveDocs = createMemo(() =>
-    exclusive().map((path) => ({
-      path,
-      name: path.split(/[\\/]/).pop() ?? path,
-    })),
-  )
+  const attached = createMemo(() => {
+    const locked = attachedPaths()
+    return [...props.instructions]
+      .filter((item) => locked.has(normalizePath(item.path)) || (item.configPath && locked.has(normalizePath(item.configPath))))
+      .sort((left, right) => {
+        if (left.scope === right.scope) return 0
+        return left.scope === "global" ? -1 : 1
+      })
+  })
+  const attachedKnown = createMemo(() => {
+    const known = new Set(
+      attached().flatMap((item) => [normalizePath(item.path), item.configPath ? normalizePath(item.configPath) : ""]),
+    )
+    return props.settings.instructionPaths.filter((path) => !isAgentsMdPath(path) && !known.has(normalizePath(path)))
+  })
+  const available = createMemo(() => {
+    const locked = attachedPaths()
+    const needle = addQuery().trim().toLowerCase()
+    return props.instructions.filter((item) => {
+      if (locked.has(normalizePath(item.path))) return false
+      if (item.configPath && locked.has(normalizePath(item.configPath))) return false
+      if (!needle) return true
+      return props.instructionLabel(item).toLowerCase().includes(needle)
+    })
+  })
 
   const patch = (next: Partial<AgentSettings>) => props.onChange({ ...props.settings, ...next })
 
   return (
     <ScrollView class="ava-agent-form" thumbVisibility="hover">
       <section class="ava-agent-form-section">
-        <div class="ava-agent-form-heading">{language.t("ava.agents.form.instructions")}</div>
+        <div class="ava-agent-form-heading-row">
+          <div class="ava-agent-form-heading">{language.t("ava.agents.form.instructions")}</div>
+          <button
+            type="button"
+            class="ava-agent-add"
+            onClick={() => {
+              setAddOpen((current) => !current)
+              setAddQuery("")
+            }}
+          >
+            {language.t("ava.agents.form.instructions.add")}
+          </button>
+        </div>
         <For
-          each={ambient()}
-          fallback={<div class="ava-agent-picker-empty">{language.t("ava.agents.form.instructions.none")}</div>}
+          each={attached()}
+          fallback={
+            <Show when={attachedKnown().length === 0}>
+              <div class="ava-agent-picker-empty">{language.t("ava.agents.form.instructions.none")}</div>
+            </Show>
+          }
         >
           {(item) => (
-            <div class="ava-agent-chip" data-locked="true">
+            <div class="ava-agent-chip">
               <span class="ava-agent-chip-scope">
                 {item.scope === "global"
                   ? language.t("ava.agents.form.instructions.scope.global")
                   : language.t("ava.agents.form.instructions.scope.project")}
               </span>
               <span>{props.instructionLabel(item)}</span>
-            </div>
-          )}
-        </For>
-        <For each={exclusiveDocs()}>
-          {(item) => (
-            <div class="ava-agent-chip">
-              <span>{item.name}</span>
               <IconButtonV2
                 type="button"
                 size="small"
@@ -73,19 +99,76 @@ export function AvaAgentSettingsForm(props: {
                 aria-label={language.t("ava.agents.form.instructions.remove")}
                 icon={<Icon name="close" />}
                 onClick={() =>
-                  patch({ instructionPaths: exclusive().filter((path) => path !== item.path) })
+                  patch({
+                    instructionPaths: props.settings.instructionPaths.filter(
+                      (path) => !samePath(path, item.path) && !samePath(path, item.configPath),
+                    ),
+                  })
                 }
               />
             </div>
           )}
         </For>
+        <For each={attachedKnown()}>
+          {(path) => (
+            <div class="ava-agent-chip">
+              <span>{path.split(/[\\/]/).pop() ?? path}</span>
+              <IconButtonV2
+                type="button"
+                size="small"
+                variant="ghost-muted"
+                aria-label={language.t("ava.agents.form.instructions.remove")}
+                icon={<Icon name="close" />}
+                onClick={() =>
+                  patch({ instructionPaths: props.settings.instructionPaths.filter((item) => !samePath(item, path)) })
+                }
+              />
+            </div>
+          )}
+        </For>
+        <Show when={addOpen()}>
+          <div class="ava-agent-picker">
+            <input
+              class="ava-agent-input"
+              value={addQuery()}
+              placeholder={language.t("ava.agents.form.instructions.search")}
+              onInput={(event) => setAddQuery(event.currentTarget.value)}
+              ref={(element) => requestAnimationFrame(() => element.focus())}
+            />
+            <ScrollView class="ava-agent-picker-list" thumbVisibility="hover">
+              <For
+                each={available()}
+                fallback={<div class="ava-agent-picker-empty">{language.t("ava.agents.form.instructions.empty")}</div>}
+              >
+                {(item) => (
+                  <button
+                    type="button"
+                    class="ava-agent-picker-item"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      patch({ instructionPaths: [...props.settings.instructionPaths, item.path] })
+                      setAddOpen(false)
+                    }}
+                  >
+                    <span class="ava-agent-chip-scope">
+                      {item.scope === "global"
+                        ? language.t("ava.agents.form.instructions.scope.global")
+                        : language.t("ava.agents.form.instructions.scope.project")}
+                    </span>
+                    <span>{props.instructionLabel(item)}</span>
+                  </button>
+                )}
+              </For>
+            </ScrollView>
+          </div>
+        </Show>
       </section>
 
       <Field label={language.t("ava.agents.form.description")}>
-        <input
-          class="ava-agent-input"
+        <DescriptionInput
           value={props.settings.description}
-          onInput={(event) => patch({ description: event.currentTarget.value })}
+          label={language.t("ava.agents.form.description")}
+          onInput={(value) => patch({ description: value })}
         />
       </Field>
       <Field label={language.t("ava.agents.form.role")}>
@@ -99,19 +182,17 @@ export function AvaAgentSettingsForm(props: {
           </For>
         </select>
       </Field>
-      <Field label={language.t("ava.agents.form.model")} hint={language.t("ava.agents.form.model.hint")}>
-        <input
-          class="ava-agent-input"
+      <Field label={language.t("ava.agents.form.model")}>
+        <AvaAgentModelPicker
           value={props.settings.model}
-          placeholder={language.t("ava.agents.form.model.placeholder")}
-          onInput={(event) => patch({ model: event.currentTarget.value })}
+          onChange={(model) => patch({ model, variant: "" })}
         />
       </Field>
       <Field label={language.t("ava.agents.form.variant")}>
-        <input
-          class="ava-agent-input"
+        <AvaAgentVariantPicker
+          model={props.settings.model}
           value={props.settings.variant}
-          onInput={(event) => patch({ variant: event.currentTarget.value })}
+          onChange={(variant) => patch({ variant })}
         />
       </Field>
       <SliderField
@@ -134,13 +215,8 @@ export function AvaAgentSettingsForm(props: {
           onInput={(event) => patch({ steps: event.currentTarget.value })}
         />
       </Field>
-      <Field label={language.t("ava.agents.form.color")} hint={language.t("ava.agents.form.color.hint")}>
-        <input
-          class="ava-agent-input"
-          value={props.settings.color}
-          placeholder="#4C6FFF"
-          onInput={(event) => patch({ color: event.currentTarget.value })}
-        />
+      <Field label={language.t("ava.agents.form.color")}>
+        <ColorPicker value={props.settings.color} onChange={(color) => patch({ color })} />
       </Field>
       <Field label={language.t("ava.agents.form.reasoning")} hint={language.t("ava.agents.form.reasoning.hint")}>
         <select
@@ -158,9 +234,12 @@ export function AvaAgentSettingsForm(props: {
         </select>
       </Field>
       <div class="ava-agent-form-row ava-agent-form-switches">
-        <Switch checked={props.settings.disable} onChange={(value) => patch({ disable: value })}>
-          {language.t("ava.agents.form.disable")}
-        </Switch>
+        <div class="ava-agent-switch">
+          <Switch checked={props.settings.disable} onChange={(value) => patch({ disable: value })}>
+            {language.t("ava.agents.form.disable")}
+          </Switch>
+          <span class="ava-agent-field-hint">{language.t("ava.agents.form.disable.hint")}</span>
+        </div>
         <Switch checked={props.settings.hidden} onChange={(value) => patch({ hidden: value })}>
           {language.t("ava.agents.form.hidden")}
         </Switch>
@@ -256,6 +335,60 @@ export function AvaAgentSettingsForm(props: {
   )
 }
 
+function DescriptionInput(props: { value: string; label: string; onInput: (value: string) => void }) {
+  let element: HTMLTextAreaElement | undefined
+  createEffect(() => {
+    props.value
+    if (element) growDescription(element)
+  })
+  return (
+    <ScrollView class="ava-agent-description-scroll" thumbVisibility="hover">
+      <textarea
+        class="ava-agent-input ava-agent-description"
+        value={props.value}
+        rows={1}
+        aria-label={props.label}
+        ref={(node) => {
+          element = node
+          growDescription(node)
+        }}
+        onInput={(event) => {
+          growDescription(event.currentTarget)
+          props.onInput(event.currentTarget.value)
+        }}
+      />
+    </ScrollView>
+  )
+}
+
+function ColorPicker(props: { value: string; onChange: (value: string) => void }) {
+  const language = useLanguage()
+  const hex = () => (HEX.test(props.value.trim()) ? props.value.trim() : "#808080")
+  return (
+    <div class="ava-agent-color">
+      <label class="ava-agent-color-swatch">
+        <input
+          type="color"
+          value={hex()}
+          aria-label={language.t("ava.agents.form.color")}
+          onInput={(event) => props.onChange(event.currentTarget.value)}
+        />
+      </label>
+      <span class="ava-agent-color-value">{props.value.trim() || hex()}</span>
+      <Show when={props.value.trim()}>
+        <button type="button" class="ava-agent-add" onClick={() => props.onChange("")}>
+          {language.t("ava.agents.form.color.clear")}
+        </button>
+      </Show>
+    </div>
+  )
+}
+
+function growDescription(element: HTMLTextAreaElement) {
+  element.style.height = "auto"
+  element.style.height = `${element.scrollHeight}px`
+}
+
 function roleLabel(language: ReturnType<typeof useLanguage>, mode: AgentMode) {
   if (mode === "primary") return language.t("ava.agents.form.role.chat")
   if (mode === "subagent") return language.t("ava.agents.form.role.helper")
@@ -321,10 +454,19 @@ function SliderField(props: { label: string; value: string; fallback: number; on
 
 function Field(props: { label: string; hint?: string; children: JSX.Element }) {
   return (
-    <label class="ava-agent-field">
+    <div class="ava-agent-field">
       <span class="ava-agent-field-label">{props.label}</span>
       {props.children}
       <Show when={props.hint}>{(hint) => <span class="ava-agent-field-hint">{hint()}</span>}</Show>
-    </label>
+    </div>
   )
+}
+
+function normalizePath(path: string) {
+  return path.replace(/\\/g, "/").toLowerCase()
+}
+
+function samePath(left: string, right?: string) {
+  if (!right) return false
+  return normalizePath(left) === normalizePath(right)
 }
