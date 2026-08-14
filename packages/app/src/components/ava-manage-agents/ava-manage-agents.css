@@ -1,28 +1,43 @@
 .ava-manage-agents {
   display: flex;
   min-height: 0;
+  min-width: 0;
   height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 
 .ava-manage-agents-sidebar {
   display: flex;
   flex-direction: column;
   width: 260px;
-  min-width: 220px;
+  min-width: 0;
   max-width: 320px;
   min-height: 0;
+  overflow: hidden;
   border-inline-end: 1px solid var(--v2-border-border-weak, var(--border-weak-base));
   background: var(--v2-background-bg-base, var(--background-base));
 }
 
+.ava-manage-agents-search {
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 8px 8px 0;
+}
+
+.ava-manage-agents-search [data-component="text-input-v2"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+
 .ava-manage-agents-list {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
   flex: 1;
+  min-height: 0;
+}
+
+.ava-manage-agents-list .scroll-view__viewport {
   padding: 8px 6px;
-  overflow: auto;
 }
 
 .ava-manage-agents-group {
@@ -99,27 +114,228 @@
   flex-direction: column;
 }
 
+.ava-agent-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.ava-agent-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 10px 16px 0;
+}
+
+.ava-agent-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--v2-text-text-base, var(--text-base));
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 .ava-manage-agents-empty {
   display: flex;
   flex: 1;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   color: var(--v2-text-text-weak, var(--text-weak));
+  text-align: center;
+}
+
+.ava-manage-agents-empty-label {
   font-size: 14px;
+  font-weight: 500;
+  color: var(--v2-text-text-strong, var(--text-strong));
+}
+
+.ava-manage-agents-editor-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .ava-manage-agents-editor {
   display: block;
-  flex: 1;
-  min-height: 0;
+  min-height: 100%;
   width: 100%;
   padding: 28px 36px;
   border: 0;
   resize: none;
+  overflow: hidden;
   background: transparent;
   color: var(--v2-text-text-base, var(--text-base));
   font: inherit;
   font-size: 14px;
   line-height: 1.6;
   outline: none;
+}
+
+.ava-agent-form {
+  flex: 1;
+  min-height: 0;
+}
+
+.ava-agent-form .scroll-view__viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 24px 32px;
+}
+
+.ava-agent-form-section,
+.ava-agent-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ava-agent-form-heading,
+.ava-agent-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--v2-text-text-weak, var(--text-weak));
+}
+
+.ava-agent-field-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--v2-text-text-faint, var(--text-weak));
+}
+
+.ava-agent-form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.ava-agent-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ava-agent-slider input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  margin: 8px 0;
+  cursor: pointer;
+  accent-color: var(--text-interactive-base, var(--v2-text-text-accent, #6b8cff));
+}
+
+.ava-agent-slider-value {
+  width: 2.4em;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-text-text-weak, var(--text-weak));
+  text-align: end;
+}
+
+.ava-agent-form-switches {
+  align-items: center;
+}
+
+.ava-agent-input {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--v2-border-border-weak, var(--border-weak-base));
+  border-radius: 6px;
+  background: var(--v2-background-bg-strong, var(--background-stronger));
+  color: var(--v2-text-text-base, var(--text-base));
+  font: inherit;
+  font-size: 13px;
+}
+
+.ava-agent-input:focus {
+  outline: none;
+  border-color: var(--v2-border-border-strong, var(--border-strong-base));
+}
+
+.ava-agent-chip,
+.ava-agent-task-row,
+.ava-agent-perm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ava-agent-chip,
+.ava-agent-perm {
+  min-height: 28px;
+}
+
+.ava-agent-chip-scope {
+  flex-shrink: 0;
+  color: var(--v2-text-text-faint, var(--text-weak));
+  font-size: 11px;
+}
+
+.ava-agent-chip[data-locked="true"] {
+  cursor: default;
+}
+
+.ava-agent-chip span,
+.ava-agent-perm span {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+}
+
+.ava-agent-perm-select {
+  width: 108px;
+  flex: 0 0 108px;
+}
+
+.ava-agent-add {
+  align-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--v2-text-text-base, var(--text-base));
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ava-agent-picker {
+  max-height: 180px;
+  min-height: 0;
+  border: 1px solid var(--v2-border-border-weak, var(--border-weak-base));
+  border-radius: 6px;
+}
+
+.ava-agent-picker-item {
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.ava-agent-picker-item:hover {
+  background: color-mix(in srgb, #ffffff 6%, transparent);
+}
+
+.ava-agent-picker-empty {
+  padding: 8px;
+  color: var(--v2-text-text-weak, var(--text-weak));
+  font-size: 12px;
 }

@@ -58,7 +58,7 @@ export async function loadInstructions(input: {
       toInstruction("global", entry, relativeInstruction(input.config, entry.path)),
     ),
   ]
-  const named = await Promise.all(
+  return Promise.all(
     extras.map(async (item) => {
       const raw = (await input.access.read?.(item.path)) ?? ""
       const heading = headingName(raw)
@@ -66,11 +66,25 @@ export async function loadInstructions(input: {
       return { ...item, name: heading }
     }),
   )
-  return [
-    sticky("project", joinPath(input.project, "AGENTS.md")),
-    sticky("global", joinPath(input.config, "AGENTS.md")),
-    ...named,
-  ]
+}
+
+export function instructionFolderGlob(scope: AgentsScope, root: string) {
+  if (scope === "project") return joinPath(root, ".opencode", "instructions", "*.md")
+  return joinPath(root, "instructions", "*.md")
+}
+
+export function withInstructionGlob(current: string[], glob: string) {
+  if (current.some((item) => samePath(item, glob))) return current
+  return [...current, glob]
+}
+
+export function isAgentsMdPath(path: string) {
+  return /(?:^|[\\/])AGENTS\.md$/i.test(path)
+}
+
+export function exclusiveInstructionPaths(paths: string[], ambient: string[]) {
+  const locked = new Set(ambient.map(normalizePath))
+  return paths.filter((path) => !locked.has(normalizePath(path)) && !isAgentsMdPath(path))
 }
 
 export function instructionConfigPath(root: string, absolute: string) {
@@ -105,20 +119,16 @@ function toInstruction(scope: AgentsScope, entry: BrowseDirectoryEntry, configPa
   }
 }
 
-function sticky(scope: AgentsScope, path: string): InstructionDocument {
-  return {
-    id: documentId("instruction", scope, path),
-    kind: "instruction",
-    scope,
-    slug: "agents",
-    name: "",
-    path,
-    sticky: true,
-  }
-}
-
 function relativeInstruction(root: string, absolute: string) {
   const prefix = root.replace(/[\\/]+$/, "")
   if (!absolute.toLowerCase().startsWith(prefix.toLowerCase())) return absolute.replace(/\\/g, "/")
   return absolute.slice(prefix.length).replace(/^[\\/]+/, "").replace(/\\/g, "/")
+}
+
+function normalizePath(path: string) {
+  return path.replace(/\\/g, "/").toLowerCase()
+}
+
+function samePath(left: string, right: string) {
+  return normalizePath(left) === normalizePath(right)
 }

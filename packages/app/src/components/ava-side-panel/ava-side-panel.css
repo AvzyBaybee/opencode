@@ -47,7 +47,8 @@
 
 .ava-side-panel .ava-manage-agents-sidebar {
   width: 180px;
-  min-width: 148px;
+  min-width: 0;
+  max-width: 180px;
 }
 
 .ava-side-panel [data-slot="session-review-v2-sidebar-header"] {
@@ -445,8 +446,19 @@
 }
 
 .ava-file-row-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-end: 2px;
+  cursor: pointer;
   opacity: 0;
   transition: opacity 100ms ease;
+}
+
+.ava-file-row-checkbox [data-slot="checkbox-v2"] {
+  pointer-events: none;
 }
 
 .ava-file-row-checkbox-checked,

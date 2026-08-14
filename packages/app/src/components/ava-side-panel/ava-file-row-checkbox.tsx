@@ -12,17 +12,17 @@ export function AvaFileRowCheckbox(props: {
 
   return (
     <div
-      class="ava-file-row-checkbox shrink-0 pl-1"
+      class="ava-file-row-checkbox shrink-0"
       classList={{ "ava-file-row-checkbox-checked": props.checked }}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
+        props.onChange(!props.checked)
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <CheckboxV2
         checked={props.checked}
-        onChange={props.onChange}
         hideLabel
         label={language.t("ava.sidePanel.checkboxLabel", { file: name() })}
       />
