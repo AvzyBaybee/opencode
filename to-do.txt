@@ -1,0 +1,3 @@
+- Inquire about commit messages and patch notes.
+
+- Consider establishing a method of running the software that automatically triggers.

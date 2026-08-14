@@ -10,6 +10,7 @@
 .ava-manage-agents-sidebar {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   width: 260px;
   min-width: 0;
   max-width: 320px;
@@ -140,23 +141,6 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
-}
-
-.ava-manage-agents-empty {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--v2-text-text-weak, var(--text-weak));
-  text-align: center;
-}
-
-.ava-manage-agents-empty-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--v2-text-text-strong, var(--text-strong));
 }
 
 .ava-manage-agents-editor-scroll {

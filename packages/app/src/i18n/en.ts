@@ -935,7 +935,7 @@ export const dict = {
   "ava.sidePanel.copySuccess.description.other": "Copied {{count}} files to the clipboard.",
   "ava.sidePanel.copyFailed.title": "Copy failed",
   "ava.sidePanel.copyFailed.description": "Could not copy the selected files to the clipboard.",
-  "ava.sidePanel.selectFile": "Select a file to read",
+  "ava.sidePanel.selectFile": "Select a file",
   "ava.sidePanel.checkboxLabel": "Select {{file}} for copy",
   "ava.agents.tab": "Agents",
   "ava.agents.section.agents": "Agents",

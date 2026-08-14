@@ -2,7 +2,7 @@ import { createEffect, createMemo, createResource, on, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
-import { Icon } from "@opencode-ai/ui/icon"
+import { AvaEmptyState } from "@/components/ava-empty-state"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { SessionFilePanelV2Empty } from "@opencode-ai/session-ui/v2/session-file-panel-v2"
@@ -16,10 +16,7 @@ function AvaFilePreviewEmpty() {
   const language = useLanguage()
   return (
     <SessionFilePanelV2Empty>
-      <div class="ava-file-preview-empty flex flex-col items-center gap-3 text-center text-text-weak">
-        <Icon name="file-tree" size="large" />
-        <div class="text-14-medium text-text-strong">{language.t("ava.sidePanel.selectFile")}</div>
-      </div>
+      <AvaEmptyState kind="file" label={language.t("ava.sidePanel.selectFile")} />
     </SessionFilePanelV2Empty>
   )
 }

@@ -29,10 +29,10 @@ export function AvaSidePanelContent(props: {
           <SessionContextTab />
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_AGENTS_TAB}>
-          <AvaManageAgentsPage pane="agents" />
+          <AvaManageAgentsPage pane="agents" sidebarWidth={props.state.sidebarWidth} />
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_INSTRUCTIONS_TAB}>
-          <AvaManageAgentsPage pane="instructions" />
+          <AvaManageAgentsPage pane="instructions" sidebarWidth={props.state.sidebarWidth} />
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_PROJECT_FOLDER_TAB}>
           <AvaSimplifySidePanel

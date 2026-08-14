@@ -3,7 +3,7 @@ import { createStore } from "solid-js/store"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
-import { Icon } from "@opencode-ai/ui/icon"
+import { AvaEmptyState } from "@/components/ava-empty-state"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
@@ -40,7 +40,7 @@ import "./ava-manage-agents.css"
 
 type Draft = { scope: AgentsScope; value: string }
 
-export function AvaManageAgentsPage(props: { pane: AgentsPane }) {
+export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: () => number }) {
   const language = useLanguage()
   const dialog = useDialog()
   const platform = usePlatform()
@@ -269,7 +269,14 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane }) {
 
   return (
     <div class="ava-manage-agents">
-      <aside class="ava-manage-agents-sidebar">
+      <aside
+        class="ava-manage-agents-sidebar"
+        style={
+          props.sidebarWidth
+            ? { width: `${props.sidebarWidth()}px`, "max-width": `${props.sidebarWidth()}px` }
+            : undefined
+        }
+      >
         <div class="ava-manage-agents-search">
           <TextInputV2
             type="search"
@@ -352,12 +359,10 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane }) {
         <Show
           when={selected()}
           fallback={
-            <div class="ava-manage-agents-empty">
-              <Icon name={props.pane === "agents" ? "brain" : "review"} size="large" />
-              <div class="ava-manage-agents-empty-label">
-                {language.t(props.pane === "agents" ? "ava.agents.empty.agent" : "ava.agents.empty.instruction")}
-              </div>
-            </div>
+            <AvaEmptyState
+              kind={props.pane === "agents" ? "agent" : "instruction"}
+              label={language.t(props.pane === "agents" ? "ava.agents.empty.agent" : "ava.agents.empty.instruction")}
+            />
           }
         >
           <Show

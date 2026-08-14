@@ -1,0 +1,49 @@
+.ava-empty-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.ava-empty-state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.ava-empty-state-icon .ava-empty-icon {
+  display: block;
+  width: 48px;
+  height: 48px;
+}
+
+.ava-empty-state-icon .ava-empty-icon-instruction {
+  width: 36px;
+  height: 36px;
+}
+
+.ava-empty-state-icon .ava-empty-icon-file {
+  transform: translateX(-2px);
+}
+
+.ava-empty-icon-agent-outer {
+  stroke: var(--v2-background-bg-base, var(--background-base));
+  stroke-width: 2px;
+}
+
+.ava-empty-state-label {
+  margin: 0;
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  font-style: normal;
+  line-height: var(--line-height-large);
+  letter-spacing: var(--letter-spacing-normal);
+  color: var(--v2-text-text-strong, var(--text-strong));
+}
