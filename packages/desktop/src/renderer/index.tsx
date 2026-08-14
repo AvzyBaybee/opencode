@@ -230,6 +230,12 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     async browseReadTextFile(path: string) {
       return window.api.browseReadTextFile(path)
     },
+    async browseWriteTextFile(path: string, content: string) {
+      return window.api.browseWriteTextFile(path, content)
+    },
+    async browseDeletePath(path: string) {
+      return window.api.browseDeletePath(path)
+    },
 
     storage,
     draftStore: createDraftStore({

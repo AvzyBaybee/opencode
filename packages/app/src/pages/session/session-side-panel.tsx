@@ -266,22 +266,13 @@ export function SessionSidePanel(props: {
     tabs().setActive(next)
   }
   const tabsValue = createMemo(() => {
-    if (simplifyEnabled()) {
-      if (activeTab() === "context") return "context"
-      return "review"
-    }
+    if (simplifyEnabled()) return "review"
     return activeTab()
   })
-  const simplifyReviewContent = createMemo(
-    () =>
-      simplifyEnabled() &&
-      !!props.reviewV2State &&
-      (activeTab() === "review" || activeTab() === AVA_PROJECT_FOLDER_TAB || isBrowseFolderTab(activeTab() ?? "")),
-  )
+  const simplifyReviewContent = createMemo(() => simplifyEnabled() && !!props.reviewV2State)
 
   createEffect(() => {
     if (!simplifyEnabled()) return
-    if (activeTab() === "context") return
     if (activeTab() === "review") return
     tabs().setActive("review")
   })

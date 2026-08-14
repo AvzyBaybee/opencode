@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
-import { readdir, readFile, stat } from "node:fs/promises"
-import { basename, join } from "node:path"
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises"
+import { basename, dirname, join } from "node:path"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
@@ -258,6 +258,20 @@ export function registerIpcHandlers(deps: Deps) {
     const buffer = await readFile(path)
     if (buffer.includes(0)) return null
     return new TextDecoder("utf-8", { fatal: false }).decode(buffer)
+  })
+
+  ipcMain.handle("browse-write-text-file", async (_event: IpcMainInvokeEvent, path: string, content: string) => {
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, content, "utf8")
+  })
+
+  ipcMain.handle("browse-delete-path", async (_event: IpcMainInvokeEvent, path: string) => {
+    const exists = await stat(path).then(
+      () => true,
+      () => false,
+    )
+    if (!exists) return
+    await shell.trashItem(path)
   })
 
   ipcMain.handle("read-clipboard-image", () => {

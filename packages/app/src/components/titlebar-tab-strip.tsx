@@ -225,7 +225,7 @@ export function TitlebarTabStrip(props: {
   let listRef!: HTMLDivElement
   let resizeFrame: number | undefined
   const [visibility, setVisibility] = createStore<Record<string, boolean>>({})
-  const visibleTabs = createMemo(() => props.tabs.filter((tab) => tab.type === "draft" || visibility[tabKey(tab)]))
+  const visibleTabs = createMemo(() => props.tabs.filter((tab) => tab.type !== "session" || visibility[tabKey(tab)]))
   const visibleTabIds = () => visibleTabs().map(tabKey)
 
   command.register("titlebar-tab-cycle", () => [

@@ -23,6 +23,10 @@ describe("tab migration", () => {
     expect(migrateTabs([{ type: "session", sessionId: "a", dirBase64: "legacy" }], server)).toEqual([sessionTab("a")])
   })
 
+  test("drops agents workspace tabs", () => {
+    expect(migrateTabs([{ type: "agents", server, directory: "/repo" }], server)).toEqual([])
+  })
+
   test("replaces invalid top-level persisted data", () => {
     expect(migrateTabs(null, server)).toEqual([])
     expect(migrateTabs({}, server)).toEqual([])

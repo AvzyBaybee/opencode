@@ -9,6 +9,7 @@ import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
 import { createEffect, createMemo, on, Show } from "solid-js"
 import { useParams } from "@solidjs/router"
 import { CacheTimerRing, cacheDurationMs, sessionCacheExpiry } from "@/components/cache-timer-ring"
+import { AvaAgentSelector } from "@/components/ava-manage-agents/ava-agent-selector"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
@@ -72,6 +73,16 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         variantControlVisible={!props.controller.model.loading}
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
+        agentControl={
+          <AvaAgentSelector
+            title={language.t("command.agent.cycle")}
+            keybind={command.keybindParts("agent.cycle")}
+            options={() => props.controller.view.agent?.options() ?? []}
+            current={() => props.controller.view.agent?.current() ?? ""}
+            onSelect={(id) => props.controller.view.agent?.onSelect(id)}
+            onClose={props.controller.restoreFocus}
+          />
+        }
         modelControl={
           <PromptInputV2ModelControl
             loading={props.controller.model.loading}

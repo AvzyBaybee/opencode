@@ -42,6 +42,7 @@ export type PromptInputV2Props = {
   borderUnderlay?: boolean
   class?: string
   modelControl?: JSX.Element
+  agentControl?: JSX.Element
   variantControlVisible?: boolean
   attachKeybind?: string[]
   attachShortcut?: string
@@ -226,13 +227,15 @@ export function PromptInputV2(props: PromptInputV2Props) {
               onShell={props.controller.openShell}
             />
             <Show when={view.agent} keyed>
-              {(control) => (
-                <PromptInputV2ConfiguredSelect
-                  title={i18n.t("ui.promptInput.chooseAgent")}
-                  keybind={["Mod", "."]}
-                  control={control}
-                />
-              )}
+              {(control) =>
+                props.agentControl ?? (
+                  <PromptInputV2ConfiguredSelect
+                    title={i18n.t("ui.promptInput.chooseAgent")}
+                    keybind={["Mod", "."]}
+                    control={control}
+                  />
+                )
+              }
             </Show>
             <Show
               when={props.modelControl}

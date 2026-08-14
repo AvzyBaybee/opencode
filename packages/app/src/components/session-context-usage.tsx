@@ -16,6 +16,8 @@ import { getSessionContext } from "@/components/session/session-context-metrics"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { useSettings } from "@/context/settings"
+import { useAvaSimplifySidePanelSetting } from "@/components/ava-simplify-side-panel-setting"
+import { AVA_CONTEXT_TAB, createAvaSidePanelTabs } from "@/components/ava-side-panel/ava-side-panel-tabs"
 
 interface SessionContextUsageProps {
   variant?: "button" | "indicator"
@@ -51,6 +53,8 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
   const sdk = useSDK()
   const settings = useSettings()
   const providers = useProviders(() => sdk().directory)
+  const simplify = useAvaSimplifySidePanelSetting()
+  const avaTabs = createAvaSidePanelTabs(() => sdk().directory)
   const { params, tabs, view } = useSessionLayout()
   const isDesktop = createMediaQuery("(min-width: 768px)")
 
@@ -77,7 +81,11 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
   const cost = createMemo(() => {
     return usd().format(info()?.cost ?? 0)
   })
-  const contextVisible = createMemo(() => view().reviewPanel.opened() && tabState.activeTab() === "context")
+  const contextVisible = createMemo(() => {
+    if (!view().reviewPanel.opened()) return false
+    if (simplify.enabled()) return avaTabs.active() === AVA_CONTEXT_TAB
+    return tabState.activeTab() === "context"
+  })
   const hasOtherTabs = createMemo(() =>
     tabs()
       .all()
@@ -88,6 +96,18 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
     if (!params.id) return
 
     const sessionView = view()
+    if (simplify.enabled()) {
+      if (contextVisible()) {
+        avaTabs.showFiles()
+        if (sessionView.reviewPanel.source() === "context-button") sessionView.reviewPanel.close()
+        return
+      }
+      sessionView.reviewPanel.open(sessionView.reviewPanel.opened() ? "other" : "context-button")
+      tabs().setActive("review")
+      avaTabs.setActive(AVA_CONTEXT_TAB)
+      return
+    }
+
     if (contextVisible()) {
       tabs().close("context")
       if (sessionView.reviewPanel.source() === "context-button" && !hasOtherTabs()) sessionView.reviewPanel.close()

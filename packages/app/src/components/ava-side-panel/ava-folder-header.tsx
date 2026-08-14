@@ -5,6 +5,7 @@ import { useLanguage } from "@/context/language"
 import {
   AVA_PROJECT_FOLDER_TAB,
   directoryFromBrowseTab,
+  isAvaFilesTab,
   isBrowseFolderTab,
   type AvaSidePanelTabs,
 } from "./ava-side-panel-tabs"
@@ -133,7 +134,7 @@ export function AvaFolderHeader(props: {
     return directoryFromBrowseTab(active()) ?? props.tabs.projectDirectory()
   })
   const name = createMemo(() => folderBasename(activeDirectory()))
-  const menuTabs = createMemo(() => props.tabs.tabs().filter((tab) => tab !== active()))
+  const menuTabs = createMemo(() => props.tabs.tabs().filter((tab) => tab !== active() && isAvaFilesTab(tab)))
   const hasMenu = createMemo(() => menuTabs().length > 0)
   const tooltipText = createMemo(() => (isProject() ? language.t("ava.sidePanel.projectFolder") : activeDirectory()))
 

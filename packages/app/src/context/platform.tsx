@@ -56,6 +56,12 @@ type PlatformBase = {
   /** Read a UTF-8 text file for Ava browse tabs without opening a project (desktop only) */
   browseReadTextFile?(path: string): Promise<string | null>
 
+  /** Write a UTF-8 text file, creating parent folders as needed (desktop only) */
+  browseWriteTextFile?(path: string, content: string): Promise<void>
+
+  /** Delete a file (desktop only) */
+  browseDeletePath?(path: string): Promise<void>
+
   /** Restart the app  */
   restart(): Promise<void>
 
