@@ -86,14 +86,74 @@ export const themeCss = `
 
 .git-graph-tooltip-actions {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .git-graph-tooltip-actions .git-graph-button {
-  flex: 1;
+  flex: 1 1 88px;
   min-width: 0;
   padding: 0 6px;
+}
+
+.git-graph-float-bar {
+  pointer-events: none;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 21;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 12px;
+}
+
+.git-graph-float-bar > * {
+  pointer-events: auto;
+}
+
+.git-graph-float-bar > :first-child {
+  justify-self: start;
+}
+
+.git-graph-float-bar > :nth-child(2) {
+  justify-self: center;
+}
+
+.git-graph-float-bar > :last-child {
+  justify-self: end;
+}
+
+.git-graph-float-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  max-width: min(280px, 42vw);
+}
+
+.git-graph-merge-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.git-graph-merge-dialog {
+  width: min(360px, 100%);
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--git-graph-border);
+  background: var(--git-graph-panel);
+  color: var(--git-graph-text);
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
 }
 
 .git-graph-path-pop {

@@ -28,6 +28,7 @@ export type LaidOutCommit = {
   readonly branches: readonly string[]
   readonly labels: readonly CommitLabel[]
   readonly committerAt: number
+  readonly onCloud: boolean
 }
 
 export type LaidOutEdge = {
@@ -159,6 +160,7 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
       branches: item.branches,
       labels: item.labels,
       committerAt: item.commit.committerAt,
+      onCloud: item.commit.onCloud !== false,
     })
   }
 

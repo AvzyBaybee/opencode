@@ -75,6 +75,7 @@ export function drawGraph(input: {
   hoveringID?: string
   hoveringEdgeKey?: string
   selectedEdgeKey?: string
+  highlightIDs?: readonly string[]
   headID?: string
   detached?: boolean
   light?: boolean
@@ -120,6 +121,7 @@ export function drawGraph(input: {
     drawChevrons(ctx, active.points, zoom, visibleCommits, stems)
   }
 
+  const highlighted = new Set(input.highlightIDs ?? [])
   for (const commit of visibleCommits) {
     drawCommit(
       ctx,
@@ -129,6 +131,7 @@ export function drawGraph(input: {
       input.hoveringID === commit.id,
       input.headID === commit.id,
       Boolean(input.detached && input.headID === commit.id),
+      highlighted.has(commit.id),
       zoom,
       colorForLane(commit.lane, light),
     )
@@ -251,14 +254,24 @@ function drawCommit(
   hovering: boolean,
   isHead: boolean,
   detachedHere: boolean,
+  highlighted: boolean,
   zoom: number,
   laneColor: string,
 ) {
+  ctx.save()
   roundRect(ctx, commit.cardLeft, commit.cardTop, commit.cardWidth, commit.cardHeight, 10)
-  ctx.fillStyle = colors.cardFill
-  ctx.fill()
-  ctx.strokeStyle = selected ? colors.focus : hovering ? colors.nodeSelected : isHead ? laneColor : colors.cardBorder
-  ctx.lineWidth = (selected ? 2 : hovering || isHead ? 2.4 : 1) / zoom
+  if (highlighted) {
+    ctx.fillStyle = colors.focus
+    ctx.globalAlpha = 0.34
+    ctx.fill()
+    ctx.globalAlpha = 1
+  } else {
+    if (!commit.onCloud) ctx.globalAlpha = 0.42
+    ctx.fillStyle = colors.cardFill
+    ctx.fill()
+  }
+  ctx.strokeStyle = selected || highlighted ? colors.focus : hovering ? colors.nodeSelected : isHead ? laneColor : colors.cardBorder
+  ctx.lineWidth = (selected || highlighted ? 2.4 : hovering || isHead ? 2.4 : 1) / zoom
   ctx.stroke()
 
   const fontSize = 12
@@ -277,6 +290,7 @@ function drawCommit(
   ctx.fillText(commit.lines[0] ?? "", commit.x, commit.y)
   ctx.textAlign = "left"
   ctx.textBaseline = "top"
+  ctx.restore()
 }
 
 function drawLabels(ctx: CanvasRenderingContext2D, commit: LaidOutCommit, colors: ThemeColors, laneColor: string) {

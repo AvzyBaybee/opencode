@@ -1,12 +1,13 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
-import type { GitGraphSnapshot, GitGraphSource } from "../domain/contract"
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { backupLabel, type GitGraphSnapshot, type GitGraphSource } from "../domain/contract"
 import { layoutGraph } from "../layout"
 import { createGraphInteraction } from "../interaction"
-import { drawGraph } from "../render/canvas"
+import { drawGraph, hitTestCommit, screenToWorld } from "../render/canvas"
 import { canvasColors } from "../compat/theme"
 import { PathPopup } from "../details/path-popup"
 import { CommitTooltip, type GitGraphActions } from "../details/commit-tooltip"
 import { en, statusMessage, type GitGraphCopy } from "../i18n/en"
+import { expandMergeRange, localBranchNames } from "../source/actions"
 
 export type GitGraphPanelProps = {
   readonly source: GitGraphSource
@@ -24,6 +25,15 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   const [snapshot, setSnapshot] = createSignal<GitGraphSnapshot>()
   const [size, setSize] = createSignal({ width: 1, height: 1 })
   const [pathPop, setPathPop] = createSignal<{ x: number; y: number }>()
+  const [mergeIDs, setMergeIDs] = createSignal<string[]>([])
+  const [confirmMerge, setConfirmMerge] = createSignal(false)
+  const [mergeName, setMergeName] = createSignal("")
+  const [mergeBusy, setMergeBusy] = createSignal(false)
+  const [mergeError, setMergeError] = createSignal("")
+  const [namingBackup, setNamingBackup] = createSignal(false)
+  const [backupName, setBackupName] = createSignal("")
+  const [chromeBusy, setChromeBusy] = createSignal(false)
+  const [chromeError, setChromeError] = createSignal("")
   let canvas: HTMLCanvasElement | undefined
   let host: HTMLDivElement | undefined
   let dragging = false
@@ -102,6 +112,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       hoveringID: interaction.hoveringID(),
       hoveringEdgeKey: interaction.hoveringEdgeKey(),
       selectedEdgeKey: interaction.selectedEdgeKey(),
+      highlightIDs: mergeIDs(),
       headID: current.head.commitID,
       detached: current.head.detached,
       light: (props.colorScheme ?? "dark") === "light",
@@ -167,9 +178,85 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     interaction.hoveringID()
     interaction.hoveringEdgeKey()
     interaction.selectedEdgeKey()
+    mergeIDs()
     props.colorScheme
     schedulePaint()
   })
+
+  const pickingMerge = () => mergeIDs().length > 0
+
+  const cancelMerge = () => {
+    setMergeIDs([])
+    setConfirmMerge(false)
+    setMergeName("")
+    setMergeBusy(false)
+    setMergeError("")
+  }
+
+  const startMerge = () => {
+    const commit = selected()
+    if (!commit) return
+    setMergeIDs([commit.id])
+    setConfirmMerge(false)
+    setMergeError("")
+    setPathPop(undefined)
+  }
+
+  const requestMerge = () => {
+    const current = snapshot()
+    const range = mergeIDs()
+    const newest = current?.commits.find((commit) => commit.id === range[range.length - 1])
+    setMergeName(newest ? backupLabel(newest) : "")
+    setMergeError("")
+    setConfirmMerge(true)
+  }
+
+  const runMerge = async () => {
+    const range = mergeIDs()
+    const oldest = range[0]
+    const newest = range[range.length - 1]
+    if (!props.actions || !oldest || !newest || mergeBusy()) return
+    setMergeBusy(true)
+    setMergeError("")
+    const result = await props.actions.run({
+      kind: "merge",
+      commitID: oldest,
+      endID: newest,
+      name: mergeName(),
+    })
+    setMergeBusy(false)
+    if (result.ok) {
+      cancelMerge()
+      return
+    }
+    setMergeError(result.message || copy().error)
+  }
+
+  const runChrome = async (kind: "commit" | "switch", extras?: { name?: string; target?: string }) => {
+    if (!props.actions || chromeBusy()) return
+    setChromeBusy(true)
+    setChromeError("")
+    const result = await props.actions.run({
+      kind,
+      name: extras?.name,
+      target: extras?.target,
+    })
+    setChromeBusy(false)
+    if (result.ok) {
+      setNamingBackup(false)
+      setBackupName("")
+      return
+    }
+    setChromeError(result.message || copy().error)
+  }
+
+  const goToHead = () => {
+    const currentLayout = layout()
+    const headID = snapshot()?.head.commitID
+    if (!currentLayout || !headID) return
+    interaction.flyToCommit(currentLayout, headID, size().width, size().height)
+    props.onSelect?.(headID)
+  }
 
   const onPointerDown = (event: PointerEvent) => {
     dragging = true
@@ -199,10 +286,24 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
   const onPointerUp = (event: PointerEvent) => {
     const currentLayout = layout()
+    const current = snapshot()
     if (currentLayout && host && !moved) {
       const rect = host.getBoundingClientRect()
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
+      if (pickingMerge() && current) {
+        const world = screenToWorld(interaction.camera(), x, y)
+        const hit = hitTestCommit(currentLayout, world.x, world.y)
+        if (hit) {
+          setMergeIDs(expandMergeRange(current, mergeIDs(), hit.id))
+          interaction.setSelectedID(hit.id)
+          props.onSelect?.(hit.id)
+        }
+        schedulePaint()
+        dragging = false
+        moved = false
+        return
+      }
       const id = interaction.selectAt(currentLayout, x, y)
       props.onSelect?.(id)
       if (interaction.selectedEdgeKey()) setPathPop({ x, y })
@@ -245,7 +346,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
         onWheel={onWheel}
       >
         <canvas ref={canvas} class="block size-full touch-none" />
-        <Show when={pathOverlay()}>
+        <Show when={!pickingMerge() && pathOverlay()}>
           {(path) => (
             <PathPopup
               edge={path().edge}
@@ -272,6 +373,97 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
         </Show>
       </div>
 
+      <Show when={snapshot()?.status.kind === "ready" || snapshot()?.status.kind === "unborn"}>
+        <div
+          class="git-graph-float-bar"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          <div class="git-graph-float-group">
+            <Show
+              when={namingBackup()}
+              fallback={
+                <button
+                  class="git-graph-button"
+                  type="button"
+                  disabled={chromeBusy() || !props.actions}
+                  onClick={() => {
+                    setNamingBackup(true)
+                    setChromeError("")
+                  }}
+                >
+                  {copy().createBackup}
+                </button>
+              }
+            >
+              <input
+                class="git-graph-button w-full text-left"
+                value={backupName()}
+                placeholder={copy().backupName}
+                disabled={chromeBusy()}
+                autofocus
+                onInput={(event) => setBackupName(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setNamingBackup(false)
+                    setBackupName("")
+                    return
+                  }
+                  if (event.key !== "Enter") return
+                  void runChrome("commit", { name: backupName() })
+                }}
+              />
+              <div class="flex gap-1.5">
+                <button
+                  class="git-graph-button"
+                  type="button"
+                  disabled={chromeBusy()}
+                  onClick={() => void runChrome("commit", { name: backupName() })}
+                >
+                  {copy().createBackup}
+                </button>
+                <button
+                  class="git-graph-button"
+                  type="button"
+                  disabled={chromeBusy()}
+                  onClick={() => {
+                    setNamingBackup(false)
+                    setBackupName("")
+                  }}
+                >
+                  {copy().cancel}
+                </button>
+              </div>
+            </Show>
+            <Show when={chromeError()}>
+              {(text) => (
+                <div style={{ color: "var(--git-graph-text-weak)", "font-size": "11px" }}>{text()}</div>
+              )}
+            </Show>
+          </div>
+          <div class="git-graph-float-group">
+            <select
+              class="git-graph-button"
+              disabled={chromeBusy() || !props.actions || localBranchNames(snapshot()!).length === 0}
+              value={snapshot()!.head.detached ? "" : snapshot()!.head.branch || ""}
+              onChange={(event) => void runChrome("switch", { target: event.currentTarget.value })}
+            >
+              <Show when={snapshot()!.head.detached}>
+                <option value="" disabled>
+                  {copy().noBranch}
+                </option>
+              </Show>
+              <For each={localBranchNames(snapshot()!)}>
+                {(name) => <option value={name}>{name}</option>}
+              </For>
+            </select>
+          </div>
+          <button class="git-graph-button" type="button" disabled={!snapshot()?.head.commitID} onClick={goToHead}>
+            {copy().goToHead}
+          </button>
+        </div>
+      </Show>
+
       <Show when={message()}>
         {(text) => (
           <div class="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
@@ -282,19 +474,59 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
         )}
       </Show>
 
-      <Show when={snapshot()?.head.detached}>
-        <div
-          class="pointer-events-none absolute top-3 left-3 right-3 text-[11px]"
-          style={{ color: "var(--git-graph-text-weak)" }}
-        >
-          {copy().detachedHead}
-        </div>
+      <Show when={(!selectedPath() || pickingMerge()) ? selected() : undefined}>
+        {(commit) => (
+          <CommitTooltip
+            commit={commit()}
+            snapshot={snapshot()!}
+            copy={copy()}
+            actions={props.actions}
+            pickingMerge={pickingMerge()}
+            mergeCount={mergeIDs().length}
+            onStartMerge={startMerge}
+            onCancelMerge={cancelMerge}
+            onRequestMerge={requestMerge}
+          />
+        )}
       </Show>
 
-      <Show when={!selectedPath() ? selected() : undefined}>
-        {(commit) => (
-          <CommitTooltip commit={commit()} snapshot={snapshot()!} copy={copy()} actions={props.actions} />
-        )}
+      <Show when={confirmMerge()}>
+        <div
+          class="git-graph-merge-overlay"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          <div class="git-graph-merge-dialog">
+            <div class="text-[13px] font-medium">{copy().confirmMergeTitle}</div>
+            <div class="mt-1.5">{copy().confirmMerge}</div>
+            <input
+              class="git-graph-button mt-3 w-full text-left"
+              value={mergeName()}
+              placeholder={copy().mergeName}
+              disabled={mergeBusy()}
+              onInput={(event) => setMergeName(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return
+                void runMerge()
+              }}
+            />
+            <Show when={mergeError()}>
+              {(text) => (
+                <div class="mt-1.5" style={{ color: "var(--git-graph-text-weak)" }}>
+                  {text()}
+                </div>
+              )}
+            </Show>
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              <button class="git-graph-button" type="button" disabled={mergeBusy()} onClick={() => void runMerge()}>
+                {copy().mergeBackups}
+              </button>
+              <button class="git-graph-button" type="button" disabled={mergeBusy()} onClick={cancelMerge}>
+                {copy().cancel}
+              </button>
+            </div>
+          </div>
+        </div>
       </Show>
     </div>
   )

@@ -1,5 +1,6 @@
 import type { GitGraphSnapshot, GitGraphSource } from "../domain/contract"
 import { emptySnapshot } from "../domain/contract"
+import { withCloudFlags } from "../domain/cloud"
 import { loadingSnapshot, normalizeSnapshot } from "../domain/normalize"
 import { COMMIT_FORMAT, parseCommitRecords, parseRefLines } from "./parse"
 
@@ -148,14 +149,28 @@ async function readRepository(options: LocalGitSourceOptions): Promise<GitGraphS
   if (branch) parsedRefs.push({ name: branch, kind: "local", commitID })
   parsedRefs.push({ name: "HEAD", kind: "head", commitID })
 
+  const clouded = await withRemoteCloudFlags(options.run, options.worktree, commits)
+
   return normalizeSnapshot({
     worktree: options.worktree,
     repositoryRoot,
     head: { commitID, branch, detached },
-    commits,
+    commits: clouded,
     refs: uniqueRefs(parsedRefs),
     shallow: shallow.stdout.trim() === "true",
   })
+}
+
+async function withRemoteCloudFlags(
+  run: GitRunner,
+  worktree: string,
+  commits: GitGraphSnapshot["commits"],
+) {
+  const rev = await run(["rev-list", "--remotes"], worktree)
+  if (rev.exitCode !== 0) return withCloudFlags(commits, [])
+  const onCloud = new Set(rev.stdout.split(/\s+/).filter(Boolean))
+  if (onCloud.size === 0) return withCloudFlags(commits, [])
+  return commits.map((commit) => ({ ...commit, onCloud: onCloud.has(commit.id) }))
 }
 
 function uniqueRefs(refs: ReturnType<typeof parseRefLines>) {
@@ -170,18 +185,26 @@ function uniqueRefs(refs: ReturnType<typeof parseRefLines>) {
 }
 
 export async function bunGitRunner(args: readonly string[], cwd: string) {
-  const proc = Bun.spawn(
-    ["git", "--no-pager", "--no-optional-locks", "-c", "alias.log=", "-c", "log.maxCount=-1", ...args],
-    {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-    stdin: "ignore",
-  })
+  const argv = ["git", "--no-pager", "--no-optional-locks", "-c", "alias.log=", "-c", "log.maxCount=-1", ...args]
+  const proc = spawnGit(argv, cwd)
+  if (!proc) return { exitCode: 1, stdout: "", stderr: "Could not start git" }
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
   ])
   return { exitCode, stdout, stderr }
+}
+
+function spawnGit(argv: string[], cwd: string) {
+  try {
+    return Bun.spawn(argv, {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "ignore",
+    })
+  } catch {
+    return
+  }
 }

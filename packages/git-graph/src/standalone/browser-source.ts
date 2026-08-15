@@ -23,8 +23,10 @@ export function createBrowserGitActions(repo: string, options: BrowserGitSourceO
           repo,
           scope,
           kind: input.kind,
-          commitID: input.commitID,
+          commitID: input.commitID || "HEAD",
           name: input.name,
+          target: input.target,
+          endID: input.endID,
         }),
       })
       const body = (await response.json()) as { ok?: boolean; message?: string }

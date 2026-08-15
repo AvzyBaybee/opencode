@@ -21,12 +21,23 @@ export type GitGraphCopy = {
   readonly pathJoined: string
   readonly branchOff: string
   readonly restoreBackup: string
+  readonly mergeBackups: string
+  readonly mergeName: string
+  readonly mergeHint: string
+  readonly confirmMerge: string
+  readonly confirmMergeTitle: string
+  readonly moveBranchTo: string
+  readonly confirmMove: string
   readonly deleteBackup: string
   readonly confirmDelete: string
-  readonly confirmRewind: string
+  readonly confirmDeleteLater: string
   readonly createThread: string
   readonly threadName: string
   readonly cancel: string
+  readonly createBackup: string
+  readonly backupName: string
+  readonly goToHead: string
+  readonly noBranch: string
 }
 
 export const en: GitGraphCopy = {
@@ -51,13 +62,24 @@ export const en: GitGraphCopy = {
   pathBranchedOff: "branched off",
   pathJoined: "joined",
   branchOff: "Create branch",
-  restoreBackup: "Switch",
-  deleteBackup: "Reset",
-  confirmDelete: "Reset this backup?",
-  confirmRewind: "This will delete all backups past this point on this thread. This backup stays.",
+  restoreBackup: "Restore backup",
+  mergeBackups: "Merge",
+  mergeName: "Merged backup name",
+  mergeHint: "Click consecutive backups on this thread, then Merge.",
+  confirmMerge: "Merge these backups into one? This cannot be undone from here.",
+  confirmMergeTitle: "Merge backups",
+  moveBranchTo: "Move branch to",
+  confirmMove: "This branch’s backups will sit on top of the one you pick. This branch name is then removed.",
+  deleteBackup: "Delete",
+  confirmDelete: "Delete this backup? You will land on the backup before it.",
+  confirmDeleteLater: "This backup and every newer one on this thread will be deleted. You will land on the backup before this.",
   createThread: "Create",
   threadName: "Branch name",
   cancel: "Cancel",
+  createBackup: "Create backup",
+  backupName: "Backup name",
+  goToHead: "Go to most recent backup",
+  noBranch: "No branch name",
 }
 
 export function statusMessage(copy: GitGraphCopy, kind: string, fallback?: string) {

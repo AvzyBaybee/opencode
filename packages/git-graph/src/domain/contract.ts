@@ -21,6 +21,8 @@ export type GitGraphCommit = {
   readonly committerAt: number
   /** Optional future backup-name override; UI falls back to subject. */
   readonly backupName?: string
+  /** True when this backup is reachable from a remote-tracking tip. */
+  readonly onCloud?: boolean
 }
 
 export type GitGraphStatus =

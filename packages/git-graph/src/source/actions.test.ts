@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import type { GitGraphCommit, GitGraphSnapshot } from "../domain/contract"
-import { hasLaterBackups, planGitAction, sanitizeBranchName } from "./actions"
+import {
+  canMoveCurrentBranch,
+  canStartMerge,
+  expandMergeRange,
+  hasLaterBackups,
+  isProtectedBranch,
+  planGitAction,
+  sanitizeBranchName,
+} from "./actions"
 
 describe("git action planner", () => {
   test("sanitizes thread names", () => {
@@ -26,42 +34,142 @@ describe("git action planner", () => {
     expect(plan).toEqual({ ok: true, steps: [["switch", "main"]] })
   })
 
-  test("restores a mid backup by detaching", () => {
+  test("restores a mid backup by creating a thread", () => {
     const plan = planGitAction({ snapshot: linear(), kind: "restore", commitID: "c1" })
-    expect(plan).toEqual({ ok: true, steps: [["switch", "--detach", "c1"]] })
+    expect(plan).toEqual({ ok: true, steps: [["switch", "-c", "one", "c1"]] })
   })
 
-  test("drops a branch tip with reset when it is HEAD", () => {
+  test("names a restore thread uniquely when the subject is taken", () => {
+    const plan = planGitAction({ snapshot: namedBranch("one"), kind: "restore", commitID: "c1" })
+    expect(plan).toEqual({ ok: true, steps: [["switch", "-c", "one-c1", "c1"]] })
+  })
+
+  test("drops a branch tip by resetting to its parent", () => {
     expect(hasLaterBackups(linear(), "c2")).toBe(false)
     const plan = planGitAction({ snapshot: linear(), kind: "delete", commitID: "c2" })
     expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c1"]] })
   })
 
-  test("deletes a side-thread tip with branch -D", () => {
+  test("deletes a side-thread tip by resetting that thread to its parent", () => {
     const plan = planGitAction({ snapshot: branched(), kind: "delete", commitID: "s1" })
-    expect(plan).toEqual({ ok: true, steps: [["branch", "-D", "feature"]] })
-  })
-
-  test("rewinds a thread to this backup and keeps it", () => {
-    expect(hasLaterBackups(linear(), "c1")).toBe(true)
-    const plan = planGitAction({ snapshot: linear(), kind: "delete", commitID: "c1" })
-    expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c1"]] })
-  })
-
-  test("switches to the descendant thread before rewind", () => {
-    const plan = planGitAction({ snapshot: rewindOtherThread(), kind: "delete", commitID: "c1" })
     expect(plan).toEqual({
       ok: true,
       steps: [
-        ["switch", "main"],
+        ["switch", "feature"],
         ["reset", "--hard", "c1"],
       ],
     })
   })
 
-  test("refuses rewind when only remotes sit after it", () => {
+  test("deletes this backup and newer ones on the thread", () => {
+    expect(hasLaterBackups(linear(), "c1")).toBe(true)
+    const plan = planGitAction({ snapshot: linear(), kind: "delete", commitID: "c1" })
+    expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c0"]] })
+  })
+
+  test("switches to the descendant thread before deleting through it", () => {
+    const plan = planGitAction({ snapshot: rewindOtherThread(), kind: "delete", commitID: "c1" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["switch", "main"],
+        ["reset", "--hard", "c0"],
+      ],
+    })
+  })
+
+  test("deletes a local tip even if a remote backup sits after it", () => {
     const plan = planGitAction({ snapshot: remoteOnlyAfter(), kind: "delete", commitID: "c1" })
+    expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c0"]] })
+  })
+
+  test("refuses to delete the first backup", () => {
+    const plan = planGitAction({ snapshot: linear(), kind: "delete", commitID: "c0" })
     expect(plan.ok).toBe(false)
+  })
+
+  test("grows a merge range along consecutive backups", () => {
+    expect(expandMergeRange(linear(), [], "c1")).toEqual(["c1"])
+    expect(expandMergeRange(linear(), ["c1"], "c2")).toEqual(["c1", "c2"])
+    expect(expandMergeRange(linear(), ["c2"], "c0")).toEqual(["c0", "c1", "c2"])
+    expect(expandMergeRange(linear(), ["c1", "c2"], "s1")).toEqual(["c1", "c2"])
+  })
+
+  test("merges a selected range at the tip into one commit", () => {
+    expect(canStartMerge(linear(), "c2")).toBe(true)
+    const plan = planGitAction({ snapshot: linear(), kind: "merge", commitID: "c1", endID: "c2", name: "tidy" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["reset", "--soft", "c0"],
+        ["commit", "-m", "tidy"],
+      ],
+    })
+  })
+
+  test("replays later backups when the merge range is not the tip", () => {
+    const plan = planGitAction({ snapshot: longer(), kind: "merge", commitID: "c1", endID: "c2", name: "tidy" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["switch", "--detach", "c2"],
+        ["reset", "--soft", "c0"],
+        ["commit", "-m", "tidy"],
+        ["rebase", "--onto", "HEAD", "c2", "main"],
+        ["switch", "main"],
+      ],
+    })
+  })
+
+  test("refuses merge without a name or a second backup", () => {
+    expect(planGitAction({ snapshot: linear(), kind: "merge", commitID: "c1", endID: "c2" }).ok).toBe(false)
+    expect(planGitAction({ snapshot: linear(), kind: "merge", commitID: "c2", name: "tidy" }).ok).toBe(false)
+  })
+
+  test("refuses merge when a join sits in the range", () => {
+    const plan = planGitAction({ snapshot: joined(), kind: "merge", commitID: "c1", endID: "m1", name: "tidy" })
+    expect(plan.ok).toBe(false)
+  })
+
+  test("moves the current thread onto another and deletes it", () => {
+    expect(canMoveCurrentBranch(onFeature())).toBe(true)
+    const plan = planGitAction({ snapshot: onFeature(), kind: "move", commitID: "s1", target: "main" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["rebase", "main"],
+        ["switch", "main"],
+        ["merge", "--ff-only", "feature"],
+        ["branch", "-D", "feature"],
+      ],
+    })
+  })
+
+  test("refuses moving a protected thread", () => {
+    expect(isProtectedBranch("Custom")).toBe(true)
+    expect(canMoveCurrentBranch(linear())).toBe(false)
+    const plan = planGitAction({ snapshot: linear(), kind: "move", commitID: "c2", target: "feature" })
+    expect(plan.ok).toBe(false)
+  })
+
+  test("creates a backup with add and commit", () => {
+    const plan = planGitAction({ snapshot: linear(), kind: "commit", name: "save point" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["add", "-A"],
+        ["commit", "-m", "save point"],
+      ],
+    })
+  })
+
+  test("refuses an unnamed backup", () => {
+    expect(planGitAction({ snapshot: linear(), kind: "commit", name: "  " }).ok).toBe(false)
+  })
+
+  test("switches to another local thread", () => {
+    const plan = planGitAction({ snapshot: branched(), kind: "switch", target: "feature" })
+    expect(plan).toEqual({ ok: true, steps: [["switch", "feature"]] })
   })
 })
 
@@ -101,6 +209,34 @@ function linear() {
   })
 }
 
+function longer() {
+  return snapshot({
+    head: { commitID: "c3", branch: "main", detached: false },
+    commits: [
+      commit("c3", ["c2"], "three"),
+      commit("c2", ["c1"], "two"),
+      commit("c1", ["c0"], "one"),
+      commit("c0", [], "root"),
+    ],
+    refs: [
+      { name: "main", kind: "local", commitID: "c3" },
+      { name: "HEAD", kind: "head", commitID: "c3" },
+    ],
+  })
+}
+
+function namedBranch(name: string) {
+  const base = linear()
+  return snapshot({
+    ...base,
+    refs: [
+      { name: "main", kind: "local", commitID: "c2" },
+      { name, kind: "local", commitID: "c2" },
+      { name: "HEAD", kind: "head", commitID: "c2" },
+    ],
+  })
+}
+
 function branched() {
   return snapshot({
     head: { commitID: "c2", branch: "main", detached: false },
@@ -118,6 +254,13 @@ function branched() {
   })
 }
 
+function onFeature() {
+  return snapshot({
+    ...branched(),
+    head: { commitID: "s1", branch: "feature", detached: false },
+  })
+}
+
 function rewindOtherThread() {
   return snapshot({
     head: { commitID: "s1", branch: "feature", detached: false },
@@ -130,7 +273,7 @@ function rewindOtherThread() {
     refs: [
       { name: "main", kind: "local", commitID: "c2" },
       { name: "feature", kind: "local", commitID: "s1" },
-      { name: "HEAD", kind: "head", commitID: "s1" },
+      { name: "HEAD", kind: "head", commitID: "c2" },
     ],
   })
 }
@@ -143,6 +286,23 @@ function remoteOnlyAfter() {
       { name: "main", kind: "local", commitID: "c1" },
       { name: "origin/main", kind: "remote", commitID: "c2", remote: "origin" },
       { name: "HEAD", kind: "head", commitID: "c1" },
+    ],
+  })
+}
+
+function joined() {
+  return snapshot({
+    head: { commitID: "m1", branch: "main", detached: false },
+    commits: [
+      commit("m1", ["c2", "s1"], "join"),
+      commit("c2", ["c1"], "main tip"),
+      commit("s1", ["c1"], "feature tip"),
+      commit("c1", ["c0"], "base"),
+      commit("c0", [], "root"),
+    ],
+    refs: [
+      { name: "main", kind: "local", commitID: "m1" },
+      { name: "HEAD", kind: "head", commitID: "m1" },
     ],
   })
 }

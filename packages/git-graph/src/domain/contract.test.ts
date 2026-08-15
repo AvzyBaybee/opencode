@@ -675,6 +675,9 @@ describe("local source", () => {
           ]
           return { exitCode: 0, stdout: `${records.join("\x1e")}\x1e`, stderr: "" }
         }
+        if (args[0] === "rev-list") {
+          return { exitCode: 0, stdout: "", stderr: "" }
+        }
         if (args[0] === "for-each-ref") {
           return { exitCode: 0, stdout: "c2\trefs/heads/main\n", stderr: "" }
         }

@@ -91,7 +91,7 @@ const server = Bun.serve({
         return Response.json({ ok: false, message: "This repository cannot be changed here." }, { status: 400, headers: cors() })
       }
       const snapshot = await readGraph(body.repo, body.scope, body.maxCommits)
-      if (snapshot.status.kind !== "ready") {
+      if (snapshot.status.kind !== "ready" && body.kind !== "commit") {
         return Response.json({ ok: false, message: "Could not read git history" }, { status: 400, headers: cors() })
       }
       const plan = planGitAction({
@@ -99,6 +99,8 @@ const server = Bun.serve({
         kind: body.kind,
         commitID: body.commitID,
         name: body.name,
+        target: body.target,
+        endID: body.endID,
       })
       if (!plan.ok) return Response.json({ ok: false, message: plan.reason }, { status: 400, headers: cors() })
       for (const args of plan.steps) {
@@ -169,13 +171,16 @@ function readActionBody(input: unknown) {
   const repo = "repo" in input && typeof input.repo === "string" ? input.repo : undefined
   const kind = "kind" in input && isActionKind(input.kind) ? input.kind : undefined
   const commitID = "commitID" in input && typeof input.commitID === "string" ? input.commitID : undefined
-  if (!repo || !kind || !commitID) return
+  if (!repo || !kind) return
+  if (kind !== "commit" && kind !== "switch" && !commitID) return
   const name = "name" in input && typeof input.name === "string" ? input.name : undefined
+  const target = "target" in input && typeof input.target === "string" ? input.target : undefined
+  const endID = "endID" in input && typeof input.endID === "string" ? input.endID : undefined
   const scope = parseScope("scope" in input && typeof input.scope === "string" ? input.scope : undefined)
   const maxCommits = parseMaxCommits("max" in input && typeof input.max === "string" ? input.max : undefined)
-  return { repo, kind, commitID, name, scope, maxCommits }
+  return { repo, kind, commitID, name, target, endID, scope, maxCommits }
 }
 
 function isActionKind(value: unknown): value is GitActionKind {
-  return value === "branch" || value === "restore" || value === "delete"
+  return value === "branch" || value === "restore" || value === "delete" || value === "merge" || value === "move" || value === "commit" || value === "switch"
 }
