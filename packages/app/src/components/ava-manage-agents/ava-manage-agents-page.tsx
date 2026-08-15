@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createResource, on, onCleanup } from "solid-js"
+import { For, Show, createEffect, createMemo, createResource, createSignal, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -15,6 +15,7 @@ import { useServerSDK } from "@/context/server-sdk"
 import { useSync } from "@/context/sync"
 import { showToast } from "@/utils/toast"
 import { AvaFileContextMenu, useAvaFileContextMenu } from "@/components/ava-side-panel/ava-file-context-menu"
+import { TruncatedCursorTooltip, isTextTruncated } from "@/components/truncated-cursor-tooltip"
 import { AvaAgentSettingsForm } from "./ava-agent-settings-form"
 import {
   exclusiveInstructionPaths,
@@ -419,8 +420,42 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
 }
 
 function growEditor(element: HTMLTextAreaElement) {
+  const scroller = element.closest(".scroll-view__viewport")
+  const top = scroller instanceof HTMLElement ? scroller.scrollTop : 0
   element.style.height = "auto"
   element.style.height = `${element.scrollHeight}px`
+  if (!(scroller instanceof HTMLElement)) return
+  const pin = () => {
+    const caret = caretBottom(element)
+    const viewBottom = top + scroller.clientHeight
+    scroller.scrollTop = caret > viewBottom ? caret - scroller.clientHeight : top
+  }
+  pin()
+  requestAnimationFrame(pin)
+}
+
+function caretBottom(textarea: HTMLTextAreaElement) {
+  const style = getComputedStyle(textarea)
+  const mirror = document.createElement("div")
+  mirror.style.boxSizing = style.boxSizing
+  mirror.style.width = `${textarea.clientWidth}px`
+  mirror.style.font = style.font
+  mirror.style.letterSpacing = style.letterSpacing
+  mirror.style.padding = style.padding
+  mirror.style.border = style.border
+  mirror.style.whiteSpace = "pre-wrap"
+  mirror.style.overflowWrap = "break-word"
+  mirror.style.position = "absolute"
+  mirror.style.visibility = "hidden"
+  mirror.style.pointerEvents = "none"
+  mirror.textContent = textarea.value.slice(0, textarea.selectionEnd)
+  const marker = document.createElement("span")
+  marker.textContent = textarea.value.slice(textarea.selectionEnd, textarea.selectionEnd + 1) || "."
+  mirror.appendChild(marker)
+  textarea.after(mirror)
+  const bottom = marker.offsetTop + marker.offsetHeight
+  mirror.remove()
+  return bottom
 }
 
 function AgentEditor(props: { value: string; onInput: (value: string) => void; onBlur: () => void }) {
@@ -481,28 +516,15 @@ function ScopeGroup(props: {
       </div>
       <For each={props.items}>
         {(item) => (
-          <div
-            class="ava-manage-agents-row"
-            data-active={props.selected === item.id}
-            onClick={() => props.onSelect(item.id)}
+          <AgentListRow
+            item={item}
+            selected={props.selected}
+            label={props.label(item)}
+            deleteLabel={props.deleteLabel}
+            onSelect={() => props.onSelect(item.id)}
+            onDelete={() => props.onDelete(item)}
             onContextMenu={(event) => props.onContextMenu(item, event)}
-          >
-            <span class="ava-manage-agents-row-label">{props.label(item)}</span>
-            <Show when={!item.sticky}>
-              <IconButtonV2
-                type="button"
-                size="small"
-                variant="ghost-muted"
-                class="ava-manage-agents-row-delete"
-                aria-label={props.deleteLabel}
-                icon={<IconV2 name="trash" />}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  props.onDelete(item)
-                }}
-              />
-            </Show>
-          </div>
+          />
         )}
       </For>
       <Show when={props.draft !== undefined}>
@@ -532,6 +554,55 @@ function ScopeGroup(props: {
         </div>
       </Show>
     </section>
+  )
+}
+
+function AgentListRow(props: {
+  item: AgentsDocument
+  selected?: string
+  label: string
+  deleteLabel: string
+  onSelect: () => void
+  onDelete: () => void
+  onContextMenu: (event: MouseEvent) => void
+}) {
+  const [nameEl, setNameEl] = createSignal<HTMLSpanElement>()
+  const [truncated, setTruncated] = createSignal(false)
+  return (
+    <TruncatedCursorTooltip text={props.label} disabled={!truncated()}>
+      {(handlers) => (
+        <div
+          class="ava-manage-agents-row"
+          data-active={props.selected === props.item.id}
+          onClick={props.onSelect}
+          onContextMenu={props.onContextMenu}
+          onMouseEnter={(event) => {
+            setTruncated(isTextTruncated(nameEl()))
+            handlers.onMouseEnter(event)
+          }}
+          onMouseLeave={handlers.onMouseLeave}
+          onMouseMove={handlers.onMouseMove}
+        >
+          <span ref={setNameEl} class="ava-manage-agents-row-label">
+            {props.label}
+          </span>
+          <Show when={!props.item.sticky}>
+            <IconButtonV2
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              class="ava-manage-agents-row-delete"
+              aria-label={props.deleteLabel}
+              icon={<IconV2 name="trash" />}
+              onClick={(event) => {
+                event.stopPropagation()
+                props.onDelete()
+              }}
+            />
+          </Show>
+        </div>
+      )}
+    </TruncatedCursorTooltip>
   )
 }
 

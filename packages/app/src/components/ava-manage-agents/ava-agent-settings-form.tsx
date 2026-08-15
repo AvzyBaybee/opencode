@@ -4,8 +4,8 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
 import { useLanguage } from "@/context/language"
-import { AvaAgentModelPicker, AvaAgentVariantPicker } from "./ava-agent-model-picker"
-import { isAgentsMdPath } from "./ava-manage-agents-files"
+import { AvaAgentModelPicker, AvaAgentReasoningPicker } from "./ava-agent-model-picker"
+import { isAgentsMdPath, matchesInstructionPath, instructionDisplayName } from "./ava-manage-agents-files"
 import type { InstructionDocument } from "./ava-manage-agents-model"
 import {
   PERMISSION_TOOLS,
@@ -17,7 +17,6 @@ import {
 
 const MODES: AgentMode[] = ["primary", "subagent", "all"]
 const ACTIONS: PermissionAction[] = ["allow", "ask", "deny"]
-const EFFORTS = ["", "minimal", "low", "medium", "high"]
 const HEX = /^#[0-9a-fA-F]{6}$/
 
 export function AvaAgentSettingsForm(props: {
@@ -29,30 +28,27 @@ export function AvaAgentSettingsForm(props: {
   const language = useLanguage()
   const [addOpen, setAddOpen] = createSignal(false)
   const [addQuery, setAddQuery] = createSignal("")
-  const attachedPaths = createMemo(
-    () => new Set(props.settings.instructionPaths.filter((path) => !isAgentsMdPath(path)).map(normalizePath)),
-  )
+  const exclusivePaths = createMemo(() => props.settings.instructionPaths.filter((path) => !isAgentsMdPath(path)))
   const attached = createMemo(() => {
-    const locked = attachedPaths()
-    return [...props.instructions]
-      .filter((item) => locked.has(normalizePath(item.path)) || (item.configPath && locked.has(normalizePath(item.configPath))))
-      .sort((left, right) => {
-        if (left.scope === right.scope) return 0
-        return left.scope === "global" ? -1 : 1
-      })
+    const docs = props.instructions
+    return exclusivePaths().map((path) => {
+      const item = docs.find((doc) => matchesInstructionPath(doc, path))
+      return {
+        path,
+        label: item ? props.instructionLabel(item) : instructionDisplayName(path),
+      }
+    })
   })
-  const attachedKnown = createMemo(() => {
-    const known = new Set(
-      attached().flatMap((item) => [normalizePath(item.path), item.configPath ? normalizePath(item.configPath) : ""]),
-    )
-    return props.settings.instructionPaths.filter((path) => !isAgentsMdPath(path) && !known.has(normalizePath(path)))
-  })
+  const attachedKeys = createMemo(
+    () => new Set(exclusivePaths().flatMap((path) => [normalizePath(path), fileName(path)])),
+  )
   const available = createMemo(() => {
-    const locked = attachedPaths()
+    const locked = attachedKeys()
     const needle = addQuery().trim().toLowerCase()
     return props.instructions.filter((item) => {
       if (locked.has(normalizePath(item.path))) return false
       if (item.configPath && locked.has(normalizePath(item.configPath))) return false
+      if (locked.has(fileName(item.path))) return false
       if (!needle) return true
       return props.instructionLabel(item).toLowerCase().includes(needle)
     })
@@ -65,67 +61,42 @@ export function AvaAgentSettingsForm(props: {
       <section class="ava-agent-form-section">
         <div class="ava-agent-form-heading-row">
           <div class="ava-agent-form-heading">{language.t("ava.agents.form.instructions")}</div>
-          <button
+          <IconButtonV2
             type="button"
-            class="ava-agent-add"
+            size="small"
+            variant="ghost-muted"
+            aria-label={language.t("ava.agents.form.instructions.add")}
+            icon={<Icon name="plus" />}
             onClick={() => {
               setAddOpen((current) => !current)
               setAddQuery("")
             }}
-          >
-            {language.t("ava.agents.form.instructions.add")}
-          </button>
+          />
         </div>
-        <For
-          each={attached()}
-          fallback={
-            <Show when={attachedKnown().length === 0}>
-              <div class="ava-agent-picker-empty">{language.t("ava.agents.form.instructions.none")}</div>
-            </Show>
-          }
-        >
-          {(item) => (
-            <div class="ava-agent-chip">
-              <span class="ava-agent-chip-scope">
-                {item.scope === "global"
-                  ? language.t("ava.agents.form.instructions.scope.global")
-                  : language.t("ava.agents.form.instructions.scope.project")}
-              </span>
-              <span>{props.instructionLabel(item)}</span>
-              <IconButtonV2
-                type="button"
-                size="small"
-                variant="ghost-muted"
-                aria-label={language.t("ava.agents.form.instructions.remove")}
-                icon={<Icon name="close" />}
-                onClick={() =>
-                  patch({
-                    instructionPaths: props.settings.instructionPaths.filter(
-                      (path) => !samePath(path, item.path) && !samePath(path, item.configPath),
-                    ),
-                  })
-                }
-              />
-            </div>
-          )}
-        </For>
-        <For each={attachedKnown()}>
-          {(path) => (
-            <div class="ava-agent-chip">
-              <span>{path.split(/[\\/]/).pop() ?? path}</span>
-              <IconButtonV2
-                type="button"
-                size="small"
-                variant="ghost-muted"
-                aria-label={language.t("ava.agents.form.instructions.remove")}
-                icon={<Icon name="close" />}
-                onClick={() =>
-                  patch({ instructionPaths: props.settings.instructionPaths.filter((item) => !samePath(item, path)) })
-                }
-              />
-            </div>
-          )}
-        </For>
+        <div class="ava-agent-instruction-list">
+          <For
+            each={attached()}
+            fallback={<div class="ava-agent-picker-empty">{language.t("ava.agents.form.instructions.none")}</div>}
+          >
+            {(item) => (
+              <div class="ava-agent-chip">
+                <span>{item.label}</span>
+                <IconButtonV2
+                  type="button"
+                  size="small"
+                  variant="ghost-muted"
+                  aria-label={language.t("ava.agents.form.instructions.remove")}
+                  icon={<Icon name="close" />}
+                  onClick={() =>
+                    patch({
+                      instructionPaths: props.settings.instructionPaths.filter((path) => !samePath(path, item.path)),
+                    })
+                  }
+                />
+              </div>
+            )}
+          </For>
+        </div>
         <Show when={addOpen()}>
           <div class="ava-agent-picker">
             <input
@@ -150,11 +121,6 @@ export function AvaAgentSettingsForm(props: {
                       setAddOpen(false)
                     }}
                   >
-                    <span class="ava-agent-chip-scope">
-                      {item.scope === "global"
-                        ? language.t("ava.agents.form.instructions.scope.global")
-                        : language.t("ava.agents.form.instructions.scope.project")}
-                    </span>
                     <span>{props.instructionLabel(item)}</span>
                   </button>
                 )}
@@ -185,14 +151,15 @@ export function AvaAgentSettingsForm(props: {
       <Field label={language.t("ava.agents.form.model")}>
         <AvaAgentModelPicker
           value={props.settings.model}
-          onChange={(model) => patch({ model, variant: "" })}
+          onChange={(model) => patch({ model, variant: "", reasoningEffort: "" })}
         />
       </Field>
-      <Field label={language.t("ava.agents.form.variant")}>
-        <AvaAgentVariantPicker
+      <Field label={language.t("ava.agents.form.reasoning")} hint={language.t("ava.agents.form.reasoning.hint")}>
+        <AvaAgentReasoningPicker
           model={props.settings.model}
-          value={props.settings.variant}
-          onChange={(variant) => patch({ variant })}
+          variant={props.settings.variant}
+          reasoningEffort={props.settings.reasoningEffort}
+          onChange={(next) => patch(next)}
         />
       </Field>
       <SliderField
@@ -212,26 +179,12 @@ export function AvaAgentSettingsForm(props: {
           class="ava-agent-input"
           inputMode="numeric"
           value={props.settings.steps}
+          placeholder={language.t("ava.agents.form.steps.placeholder")}
           onInput={(event) => patch({ steps: event.currentTarget.value })}
         />
       </Field>
       <Field label={language.t("ava.agents.form.color")}>
         <ColorPicker value={props.settings.color} onChange={(color) => patch({ color })} />
-      </Field>
-      <Field label={language.t("ava.agents.form.reasoning")} hint={language.t("ava.agents.form.reasoning.hint")}>
-        <select
-          class="ava-agent-input"
-          value={props.settings.reasoningEffort}
-          onChange={(event) => patch({ reasoningEffort: event.currentTarget.value })}
-        >
-          <For each={EFFORTS}>
-            {(effort) => (
-              <option value={effort}>
-                {effort ? effortLabel(language, effort) : language.t("ava.agents.form.default")}
-              </option>
-            )}
-          </For>
-        </select>
       </Field>
       <div class="ava-agent-form-row ava-agent-form-switches">
         <div class="ava-agent-switch">
@@ -385,8 +338,11 @@ function ColorPicker(props: { value: string; onChange: (value: string) => void }
 }
 
 function growDescription(element: HTMLTextAreaElement) {
+  const scroller = element.closest(".scroll-view__viewport")
+  const top = scroller instanceof HTMLElement ? scroller.scrollTop : 0
   element.style.height = "auto"
   element.style.height = `${element.scrollHeight}px`
+  if (scroller instanceof HTMLElement) scroller.scrollTop = top
 }
 
 function roleLabel(language: ReturnType<typeof useLanguage>, mode: AgentMode) {
@@ -399,13 +355,6 @@ function actionLabel(language: ReturnType<typeof useLanguage>, action: Permissio
   if (action === "allow") return language.t("ava.agents.form.action.allow")
   if (action === "ask") return language.t("ava.agents.form.action.ask")
   return language.t("ava.agents.form.action.deny")
-}
-
-function effortLabel(language: ReturnType<typeof useLanguage>, effort: string) {
-  if (effort === "minimal") return language.t("ava.agents.form.reasoning.minimal")
-  if (effort === "low") return language.t("ava.agents.form.reasoning.low")
-  if (effort === "medium") return language.t("ava.agents.form.reasoning.medium")
-  return language.t("ava.agents.form.reasoning.high")
 }
 
 function permissionLabel(language: ReturnType<typeof useLanguage>, tool: PermissionTool) {
@@ -460,6 +409,10 @@ function Field(props: { label: string; hint?: string; children: JSX.Element }) {
       <Show when={props.hint}>{(hint) => <span class="ava-agent-field-hint">{hint()}</span>}</Show>
     </div>
   )
+}
+
+function fileName(path: string) {
+  return path.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? path.toLowerCase()
 }
 
 function normalizePath(path: string) {

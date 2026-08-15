@@ -3,9 +3,11 @@ import {
   exclusiveInstructionPaths,
   extractAgentPromptFiles,
   extractedInstructionHeading,
+  instructionDisplayName,
   instructionFolderGlob,
   isAgentsMdPath,
   loadInstructions,
+  matchesInstructionPath,
   withInstructionGlob,
 } from "./ava-manage-agents-files"
 
@@ -43,6 +45,24 @@ describe("ava manage agents files", () => {
     expect(
       exclusiveInstructionPaths(["/c/AGENTS.md", "/c/instructions/voice.md", "/tmp/only-this-agent.md"]),
     ).toEqual(["/c/instructions/voice.md", "/tmp/only-this-agent.md"])
+  })
+
+  test("labels attached instructions by heading-style name, not the file path", () => {
+    expect(instructionDisplayName("/c/instructions/builder-instructions.md")).toBe("Builder Instructions")
+    expect(
+      matchesInstructionPath(
+        {
+          id: "instruction:global:/c/instructions/builder-instructions.md",
+          kind: "instruction",
+          scope: "global",
+          slug: "builder-instructions",
+          name: "Builder Instructions",
+          path: "/c/instructions/builder-instructions.md",
+          configPath: "instructions/builder-instructions.md",
+        },
+        "C:\\c\\instructions\\builder-instructions.md",
+      ),
+    ).toBe(true)
   })
 
   test("extracts agent bodies into instruction files and clears the agent body", async () => {

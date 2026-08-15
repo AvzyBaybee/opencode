@@ -63,9 +63,9 @@ export function AvaSidePanelContent(props: {
 function AvaSidePanelPane(props: { active: boolean; class?: string; children: JSX.Element }) {
   return (
     <div
-      class={`absolute inset-0 min-h-0 min-w-0 ${props.class ?? ""}`}
+      class={`absolute inset-0 min-h-0 min-w-0 overflow-hidden ${props.class ?? ""}`}
       classList={{
-        invisible: !props.active,
+        hidden: !props.active,
         "pointer-events-none": !props.active,
       }}
       inert={!props.active || undefined}

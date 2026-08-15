@@ -163,6 +163,20 @@ function toInstruction(scope: AgentsScope, entry: BrowseDirectoryEntry, configPa
   }
 }
 
+export function matchesInstructionPath(item: InstructionDocument, path: string) {
+  if (samePath(item.path, path)) return true
+  if (item.configPath && samePath(item.configPath, path)) return true
+  return normalizePath(fileName(item.path)) === normalizePath(fileName(path))
+}
+
+export function instructionDisplayName(path: string) {
+  return displayNameFromSlug(fileName(path).replace(/\.md$/i, ""))
+}
+
+function fileName(path: string) {
+  return path.replace(/\\/g, "/").split("/").pop() ?? path
+}
+
 function relativeInstruction(root: string, absolute: string) {
   const prefix = root.replace(/[\\/]+$/, "")
   if (!absolute.toLowerCase().startsWith(prefix.toLowerCase())) return absolute.replace(/\\/g, "/")
