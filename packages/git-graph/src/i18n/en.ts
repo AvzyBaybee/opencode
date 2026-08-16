@@ -28,6 +28,9 @@ export type GitGraphCopy = {
   readonly confirmMergeTitle: string
   readonly moveBranchTo: string
   readonly confirmMove: string
+  readonly moveChoose: string
+  readonly moveNeedsName: string
+  readonly conflictEditHint: string
   readonly deleteBackup: string
   readonly confirmDelete: string
   readonly confirmDeleteLater: string
@@ -38,6 +41,10 @@ export type GitGraphCopy = {
   readonly backupName: string
   readonly goToHead: string
   readonly noBranch: string
+  readonly noGit: string
+  readonly makeGit: string
+  readonly firstThreadName: string
+  readonly renameBranch: string
 }
 
 export const en: GitGraphCopy = {
@@ -45,9 +52,9 @@ export const en: GitGraphCopy = {
   openRepository: "Open",
   openHint: "Paste the full path to a folder that contains a .git directory, then press Enter.",
   pathPlaceholder: "C:\\path\\to\\your\\project",
-  empty: "No backups yet",
-  unborn: "Branch has no commits yet",
-  invalid: "Not a git repository",
+  empty: "No backups yet. Create one to get started.",
+  unborn: "No backups yet. Create one to get started.",
+  invalid: "This folder has no Git repository. Would you like to make one?",
   loading: "Loading backups…",
   error: "Could not read git history",
   stale: "History may be out of date",
@@ -55,7 +62,7 @@ export const en: GitGraphCopy = {
   selectRepository: "Choose a repository to visualize",
   noSelection: "Select a backup",
   detachedHead: "You are here, with no branch name",
-  pathSameThread: "Same thread",
+  pathSameThread: "Same branch",
   pathFork: "Branch off",
   pathMerge: "Merge",
   pathGrewFrom: "grew from",
@@ -63,16 +70,19 @@ export const en: GitGraphCopy = {
   pathJoined: "joined",
   branchOff: "Create branch",
   restoreBackup: "Restore backup",
-  mergeBackups: "Merge",
-  mergeName: "Merged backup name",
-  mergeHint: "Click consecutive backups on this thread, then Merge.",
-  confirmMerge: "Merge these backups into one? This cannot be undone from here.",
-  confirmMergeTitle: "Merge backups",
+  mergeBackups: "Squash",
+  mergeName: "Squashed backup name",
+  mergeHint: "Click consecutive backups on this branch, then Squash.",
+  confirmMerge: "Squash these backups into one? This cannot be undone from here.",
+  confirmMergeTitle: "Squash backups",
   moveBranchTo: "Move branch to",
-  confirmMove: "This branch’s backups will sit on top of the one you pick. This branch name is then removed.",
+  confirmMove: "Move this branch to sit on top of another branch, instead of where it currently is.",
+  moveChoose: "Choose another branch to move this to.",
+  moveNeedsName: "In order to move this branch, you need to give it a name.",
+  conflictEditHint: "Edit the files, then click Done.",
   deleteBackup: "Delete",
   confirmDelete: "Delete this backup? You will land on the backup before it.",
-  confirmDeleteLater: "This backup and every newer one on this thread will be deleted. You will land on the backup before this.",
+  confirmDeleteLater: "This backup and every newer one on this branch will be deleted. You will land on the backup before this.",
   createThread: "Create",
   threadName: "Branch name",
   cancel: "Cancel",
@@ -80,6 +90,10 @@ export const en: GitGraphCopy = {
   backupName: "Backup name",
   goToHead: "Go to most recent backup",
   noBranch: "No branch name",
+  noGit: "This folder has no Git repository. Would you like to make one?",
+  makeGit: "Create",
+  firstThreadName: "Branch name",
+  renameBranch: "Rename",
 }
 
 export function statusMessage(copy: GitGraphCopy, kind: string, fallback?: string) {
@@ -87,7 +101,11 @@ export function statusMessage(copy: GitGraphCopy, kind: string, fallback?: strin
   if (kind === "unborn") return copy.unborn
   if (kind === "invalid") return copy.invalid
   if (kind === "loading") return copy.loading
-  if (kind === "error") return fallback || copy.error
+  if (kind === "error") {
+    if (!fallback) return "There was an error."
+    const line = fallback.trim().replace(/^(fatal|error):\s*/i, "")
+    return line ? `There was an error: ${line}` : "There was an error."
+  }
   if (kind === "stale") return fallback || copy.stale
   if (kind === "unsupported") return fallback || copy.unsupported
   return fallback || ""

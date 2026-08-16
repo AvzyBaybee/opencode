@@ -39,8 +39,8 @@ export const DEFAULT_THEME: ThemeColors = {
   pillRemote: "#7a7a7a",
   pillTag: "#c4a35a",
   focus: "#6b8cff",
-  cardFill: "rgba(30,30,30,0.96)",
-  cardBorder: "#2f2f2f",
+  cardFill: "#2c2c2c",
+  cardBorder: "#5a5a5a",
 }
 
 export function createCamera(partial?: Partial<Camera>): Camera {
@@ -75,6 +75,8 @@ export function drawGraph(input: {
   hoveringID?: string
   hoveringEdgeKey?: string
   selectedEdgeKey?: string
+  hoveringLabel?: string
+  selectedLabel?: string
   highlightIDs?: readonly string[]
   headID?: string
   detached?: boolean
@@ -139,10 +141,21 @@ export function drawGraph(input: {
 
   for (const commit of visibleCommits) {
     if (commit.labels.length === 0) continue
-    drawLabels(ctx, commit, colors, colorForLane(commit.lane, light))
+    drawLabels(ctx, commit, colors, colorForLane(commit.lane, light), zoom, input.hoveringLabel, input.selectedLabel)
   }
 
   ctx.restore()
+}
+
+export function hitTestLocalLabel(layout: GraphLayout, worldX: number, worldY: number) {
+  for (let index = layout.commits.length - 1; index >= 0; index--) {
+    const commit = layout.commits[index]!
+    for (const box of labelBoxes(commit)) {
+      if (box.label.kind !== "local") continue
+      if (worldX < box.x || worldX > box.x + box.width || worldY < box.y || worldY > box.y + box.height) continue
+      return box.label.name
+    }
+  }
 }
 
 export function hitTestCommit(layout: GraphLayout, worldX: number, worldY: number) {
@@ -265,8 +278,10 @@ function drawCommit(
     ctx.globalAlpha = 0.34
     ctx.fill()
     ctx.globalAlpha = 1
+  } else if (!commit.onCloud) {
+    ctx.fillStyle = "rgba(70,70,70,0.45)"
+    ctx.fill()
   } else {
-    if (!commit.onCloud) ctx.globalAlpha = 0.42
     ctx.fillStyle = colors.cardFill
     ctx.fill()
   }
@@ -293,28 +308,48 @@ function drawCommit(
   ctx.restore()
 }
 
-function drawLabels(ctx: CanvasRenderingContext2D, commit: LaidOutCommit, colors: ThemeColors, laneColor: string) {
+function drawLabels(
+  ctx: CanvasRenderingContext2D,
+  commit: LaidOutCommit,
+  colors: ThemeColors,
+  laneColor: string,
+  zoom: number,
+  hovering?: string,
+  selected?: string,
+) {
+  const pillH = 16
+  for (const box of labelBoxes(commit)) {
+    roundRect(ctx, box.x, box.y, box.width, pillH, 8)
+    ctx.fillStyle = pillFill(box.label, colors, laneColor)
+    ctx.fill()
+    if (box.label.kind === "local" && (box.label.name === hovering || box.label.name === selected)) {
+      ctx.strokeStyle = colors.focus
+      ctx.lineWidth = 1.6 / zoom
+      ctx.stroke()
+    }
+    ctx.fillStyle = pillText(box.label, colors)
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.font = `10px Inter, ui-sans-serif, system-ui, sans-serif`
+    ctx.fillText(box.label.name, box.x + box.width / 2, box.y + pillH / 2)
+  }
+  ctx.textBaseline = "top"
+}
+
+function labelBoxes(commit: LaidOutCommit) {
   const pillH = 16
   const gap = 6
   const pad = 7
   const textY = commit.cardTop - 8 - pillH
-  ctx.font = `10px Inter, ui-sans-serif, system-ui, sans-serif`
-  const widths = commit.labels.map((label) => ctx.measureText(label.name).width + pad * 2)
+  const widths = commit.labels.map((label) => Math.ceil(label.name.length * 6 + pad * 2))
   const total = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, commit.labels.length - 1)
   let x = commit.x - total / 2
-  for (let index = 0; index < commit.labels.length; index++) {
-    const label = commit.labels[index]!
+  return commit.labels.map((label, index) => {
     const width = widths[index]!
-    roundRect(ctx, x, textY, width, pillH, 8)
-    ctx.fillStyle = pillFill(label, colors, laneColor)
-    ctx.fill()
-    ctx.fillStyle = pillText(label, colors)
-    ctx.textAlign = "center"
-    ctx.textBaseline = "middle"
-    ctx.fillText(label.name, x + width / 2, textY + pillH / 2)
+    const box = { label, x, y: textY, width, height: pillH }
     x += width + gap
-  }
-  ctx.textBaseline = "top"
+    return box
+  })
 }
 
 function pillFill(label: CommitLabel, colors: ThemeColors, laneColor: string) {

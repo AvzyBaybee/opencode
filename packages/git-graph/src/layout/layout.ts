@@ -116,7 +116,7 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
   const commits = orderCommits(snapshot.commits)
   const laneByCommit = allocateLanes(commits, snapshot.head.commitID)
   const labelsByCommit = labelsByCommitID(snapshot.refs)
-  const maxLane = Math.max(0, ...laneByCommit.values(), 0)
+  const maxLane = maxNumber(laneByCommit.values(), 0)
 
   const measured: Measured[] = commits.map((commit) => {
     const label = backupLabel(commit)
@@ -190,7 +190,10 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
   }
 
   const labelClearance = 28
-  const minTop = Math.min(...[...placed.values()].map((commit) => commit.cardTop), paddingY)
+  let minTop = paddingY
+  for (const commit of placed.values()) {
+    if (commit.cardTop < minTop) minTop = commit.cardTop
+  }
   const targetTop = paddingY + labelClearance
   if (minTop < targetTop) {
     const shift = targetTop - minTop
@@ -239,7 +242,7 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
     parent: packedById.get(item.parent.id)!,
     kind: item.kind,
   }))
-  const displayLanes = Math.max(0, ...packed.map((commit) => commit.lane))
+  const displayLanes = maxNumber(packed.map((commit) => commit.lane), 0)
   const ports = assignPorts(packedPending)
   const planned = planGutterTracks(packedPending, ports)
   const gaps = corridorGaps(planned.tracks, displayLanes, laneGap)
@@ -279,8 +282,14 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
   ]
 
   const stems = collectStems(edges)
-  const bottom = Math.max(paddingY, ...placedCommits.map((commit) => commit.cardTop + commit.cardHeight))
-  const right = Math.max(paddingX, ...placedCommits.map((commit) => commit.cardLeft + commit.cardWidth))
+  const bottom = maxNumber(
+    placedCommits.map((commit) => commit.cardTop + commit.cardHeight),
+    paddingY,
+  )
+  const right = maxNumber(
+    placedCommits.map((commit) => commit.cardLeft + commit.cardWidth),
+    paddingX,
+  )
   return {
     commits: placedCommits,
     edges,
@@ -420,7 +429,7 @@ function corridorGaps(tracks: readonly GutterTrack[], maxLane: number, fallback:
 function shiftLanes(commits: readonly LaidOutCommit[], paddingX: number, cardWidth: number, gaps: readonly number[]) {
   const leftAt = new Map<number, number>()
   let left = paddingX
-  const lastLane = Math.max(0, ...commits.map((commit) => commit.lane))
+  const lastLane = maxNumber(commits.map((commit) => commit.lane), 0)
   for (let lane = 0; lane <= lastLane; lane++) {
     leftAt.set(lane, left)
     left += cardWidth + (gaps[lane] ?? 56)
@@ -901,4 +910,12 @@ function splitAt(word: string, maxChars: number) {
   const leftover = word.length - maxChars
   if (leftover <= 2) return Math.max(1, word.length - 3)
   return maxChars
+}
+
+function maxNumber(values: Iterable<number>, start: number) {
+  let max = start
+  for (const value of values) {
+    if (value > max) max = value
+  }
+  return max
 }

@@ -5,13 +5,12 @@ import {
   canStartMerge,
   expandMergeRange,
   hasLaterBackups,
-  isProtectedBranch,
   planGitAction,
   sanitizeBranchName,
 } from "./actions"
 
 describe("git action planner", () => {
-  test("sanitizes thread names", () => {
+  test("sanitizes auto-generated thread names", () => {
     expect(sanitizeBranchName("  fix stuff  ")).toBe("fix-stuff")
     expect(sanitizeBranchName("bad name!")).toBe("bad-name")
     expect(sanitizeBranchName("..nope")).toBe(undefined)
@@ -26,7 +25,26 @@ describe("git action planner", () => {
 
   test("refuses a duplicate thread name", () => {
     const plan = planGitAction({ snapshot: linear(), kind: "branch", commitID: "c1", name: "main" })
-    expect(plan.ok).toBe(false)
+    expect(plan).toEqual({ ok: false, reason: "A branch with that name already exists." })
+  })
+
+  test("explains which part of a branch name is invalid", () => {
+    expect(planGitAction({ snapshot: linear(), kind: "branch", commitID: "c1", name: "" })).toEqual({
+      ok: false,
+      reason: "Your backup needs a name.",
+    })
+    expect(planGitAction({ snapshot: linear(), kind: "branch", commitID: "c1", name: "-hidden." })).toEqual({
+      ok: false,
+      reason: 'The name can\'t start with a dash, or end with a period.',
+    })
+    expect(planGitAction({ snapshot: linear(), kind: "branch", commitID: "c1", name: "bad name.." })).toEqual({
+      ok: false,
+      reason: 'The name can\'t contain "..", contain a space, or end with a period.',
+    })
+    expect(planGitAction({ snapshot: linear(), kind: "branch", commitID: "c1", name: "feature" })).toEqual({
+      ok: true,
+      steps: [["switch", "-c", "feature", "c1"]],
+    })
   })
 
   test("restores by switching to a local tip", () => {
@@ -34,20 +52,20 @@ describe("git action planner", () => {
     expect(plan).toEqual({ ok: true, steps: [["switch", "main"]] })
   })
 
-  test("restores a mid backup by creating a thread", () => {
+  test("restores an older backup on the same branch", () => {
     const plan = planGitAction({ snapshot: linear(), kind: "restore", commitID: "c1" })
-    expect(plan).toEqual({ ok: true, steps: [["switch", "-c", "one", "c1"]] })
+    expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c1"]] })
   })
 
-  test("names a restore thread uniquely when the subject is taken", () => {
-    const plan = planGitAction({ snapshot: namedBranch("one"), kind: "restore", commitID: "c1" })
-    expect(plan).toEqual({ ok: true, steps: [["switch", "-c", "one-c1", "c1"]] })
+  test("restores by switching when another branch already points there", () => {
+    const plan = planGitAction({ snapshot: namedBranch("one"), kind: "restore", commitID: "c2" })
+    expect(plan).toEqual({ ok: true, steps: [["switch", "main"]] })
   })
 
   test("drops a branch tip by resetting to its parent", () => {
     expect(hasLaterBackups(linear(), "c2")).toBe(false)
     const plan = planGitAction({ snapshot: linear(), kind: "delete", commitID: "c2" })
-    expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c1"]] })
+    expect(plan).toEqual({ ok: true, steps: [["reset", "--soft", "c1"]] })
   })
 
   test("deletes a side-thread tip by resetting that thread to its parent", () => {
@@ -56,7 +74,7 @@ describe("git action planner", () => {
       ok: true,
       steps: [
         ["switch", "feature"],
-        ["reset", "--hard", "c1"],
+        ["reset", "--soft", "c1"],
       ],
     })
   })
@@ -64,7 +82,7 @@ describe("git action planner", () => {
   test("deletes this backup and newer ones on the thread", () => {
     expect(hasLaterBackups(linear(), "c1")).toBe(true)
     const plan = planGitAction({ snapshot: linear(), kind: "delete", commitID: "c1" })
-    expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c0"]] })
+    expect(plan).toEqual({ ok: true, steps: [["reset", "--soft", "c0"]] })
   })
 
   test("switches to the descendant thread before deleting through it", () => {
@@ -73,19 +91,22 @@ describe("git action planner", () => {
       ok: true,
       steps: [
         ["switch", "main"],
-        ["reset", "--hard", "c0"],
+        ["reset", "--soft", "c0"],
       ],
     })
   })
 
   test("deletes a local tip even if a remote backup sits after it", () => {
     const plan = planGitAction({ snapshot: remoteOnlyAfter(), kind: "delete", commitID: "c1" })
-    expect(plan).toEqual({ ok: true, steps: [["reset", "--hard", "c0"]] })
+    expect(plan).toEqual({ ok: true, steps: [["reset", "--soft", "c0"]] })
   })
 
   test("refuses to delete the first backup", () => {
     const plan = planGitAction({ snapshot: linear(), kind: "delete", commitID: "c0" })
-    expect(plan.ok).toBe(false)
+    expect(plan).toEqual({
+      ok: false,
+      reason: "You can't delete the first backup. This is the foundation of all other backups.",
+    })
   })
 
   test("grows a merge range along consecutive backups", () => {
@@ -101,8 +122,19 @@ describe("git action planner", () => {
     expect(plan).toEqual({
       ok: true,
       steps: [
+        ["reset", "--soft", "c1"],
+        ["commit", "--amend", "-m", "tidy"],
+      ],
+    })
+  })
+
+  test("collapses a range that includes the first backup", () => {
+    const plan = planGitAction({ snapshot: linear(), kind: "merge", commitID: "c0", endID: "c2", name: "tidy" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
         ["reset", "--soft", "c0"],
-        ["commit", "-m", "tidy"],
+        ["commit", "--amend", "-m", "tidy"],
       ],
     })
   })
@@ -113,8 +145,8 @@ describe("git action planner", () => {
       ok: true,
       steps: [
         ["switch", "--detach", "c2"],
-        ["reset", "--soft", "c0"],
-        ["commit", "-m", "tidy"],
+        ["reset", "--soft", "c1"],
+        ["commit", "--amend", "-m", "tidy"],
         ["rebase", "--onto", "HEAD", "c2", "main"],
         ["switch", "main"],
       ],
@@ -145,11 +177,36 @@ describe("git action planner", () => {
     })
   })
 
-  test("refuses moving a protected thread", () => {
-    expect(isProtectedBranch("Custom")).toBe(true)
-    expect(canMoveCurrentBranch(linear())).toBe(false)
-    const plan = planGitAction({ snapshot: linear(), kind: "move", commitID: "c2", target: "feature" })
-    expect(plan.ok).toBe(false)
+  test("names a nameless thread before moving it", () => {
+    const detached = snapshot({
+      ...branched(),
+      head: { commitID: "s1", detached: true },
+    })
+    expect(canMoveCurrentBranch(detached)).toBe(true)
+    const plan = planGitAction({ snapshot: detached, kind: "move", commitID: "s1", name: "side", target: "main" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["switch", "-c", "side"],
+        ["rebase", "main"],
+        ["switch", "main"],
+        ["merge", "--ff-only", "side"],
+        ["branch", "-D", "side"],
+      ],
+    })
+  })
+
+  test("can move the current thread even if it is named main", () => {
+    const plan = planGitAction({ snapshot: branched(), kind: "move", commitID: "c2", target: "feature" })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["rebase", "feature"],
+        ["switch", "feature"],
+        ["merge", "--ff-only", "main"],
+        ["branch", "-D", "main"],
+      ],
+    })
   })
 
   test("creates a backup with add and commit", () => {
@@ -164,12 +221,42 @@ describe("git action planner", () => {
   })
 
   test("refuses an unnamed backup", () => {
-    expect(planGitAction({ snapshot: linear(), kind: "commit", name: "  " }).ok).toBe(false)
+    expect(planGitAction({ snapshot: linear(), kind: "commit", name: "  " })).toEqual({
+      ok: false,
+      reason: "Your backup needs a name.",
+    })
+  })
+
+  test("renames a local branch", () => {
+    const plan = planGitAction({ snapshot: linear(), kind: "rename", target: "main", name: "trunk" })
+    expect(plan).toEqual({ ok: true, steps: [["branch", "-m", "main", "trunk"]] })
+  })
+
+  test("refuses renaming onto a name that already exists", () => {
+    const plan = planGitAction({ snapshot: branched(), kind: "rename", target: "feature", name: "main" })
+    expect(plan).toEqual({ ok: false, reason: "A branch with that name already exists." })
   })
 
   test("switches to another local thread", () => {
     const plan = planGitAction({ snapshot: branched(), kind: "switch", target: "feature" })
     expect(plan).toEqual({ ok: true, steps: [["switch", "feature"]] })
+  })
+
+  test("discards desk changes when a switch is forced", () => {
+    const plan = planGitAction({
+      snapshot: branched(),
+      kind: "switch",
+      target: "feature",
+      force: true,
+      paths: ["notes.txt"],
+    })
+    expect(plan).toEqual({
+      ok: true,
+      steps: [
+        ["clean", "-f", "--", "notes.txt"],
+        ["switch", "-f", "feature"],
+      ],
+    })
   })
 })
 

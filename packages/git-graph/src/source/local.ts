@@ -4,7 +4,11 @@ import { withCloudFlags } from "../domain/cloud"
 import { loadingSnapshot, normalizeSnapshot } from "../domain/normalize"
 import { COMMIT_FORMAT, parseCommitRecords, parseRefLines } from "./parse"
 
-export type GitRunner = (args: readonly string[], cwd: string) => Promise<{ exitCode: number; stdout: string; stderr: string }>
+export type GitRunner = (
+  args: readonly string[],
+  cwd: string,
+  env?: Record<string, string>,
+) => Promise<{ exitCode: number; stdout: string; stderr: string }>
 
 /**
  * current = checked-out branch only
@@ -184,9 +188,9 @@ function uniqueRefs(refs: ReturnType<typeof parseRefLines>) {
   })
 }
 
-export async function bunGitRunner(args: readonly string[], cwd: string) {
+export async function bunGitRunner(args: readonly string[], cwd: string, env?: Record<string, string>) {
   const argv = ["git", "--no-pager", "--no-optional-locks", "-c", "alias.log=", "-c", "log.maxCount=-1", ...args]
-  const proc = spawnGit(argv, cwd)
+  const proc = spawnGit(argv, cwd, env)
   if (!proc) return { exitCode: 1, stdout: "", stderr: "Could not start git" }
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -196,13 +200,14 @@ export async function bunGitRunner(args: readonly string[], cwd: string) {
   return { exitCode, stdout, stderr }
 }
 
-function spawnGit(argv: string[], cwd: string) {
+function spawnGit(argv: string[], cwd: string, env?: Record<string, string>) {
   try {
     return Bun.spawn(argv, {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
       stdin: "ignore",
+      env: env ? { ...process.env, ...env } : undefined,
     })
   } catch {
     return

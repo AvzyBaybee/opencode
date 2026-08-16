@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js"
 import { backupLabel } from "../domain/contract"
 import type { GitGraphCommit, GitGraphSnapshot } from "../domain/contract"
 import type { GitGraphCopy } from "../i18n/en"
@@ -11,14 +11,28 @@ import {
   type GitActionKind,
 } from "../source/actions"
 
+export type GitActionRequest = {
+  kind: GitActionKind
+  commitID?: string
+  name?: string
+  target?: string
+  endID?: string
+  force?: boolean
+  paths?: readonly string[]
+}
+
+export type GitActionResult = {
+  ok: boolean
+  message?: string
+  overwrite?: boolean
+  conflict?: boolean
+  overwriteFiles?: string[]
+}
+
 export type GitGraphActions = {
-  run(input: {
-    kind: GitActionKind
-    commitID?: string
-    name?: string
-    target?: string
-    endID?: string
-  }): Promise<{ ok: boolean; message?: string }>
+  run(input: GitActionRequest): Promise<GitActionResult>
+  init?(name: string): Promise<GitActionResult>
+  resolve?(how: "abort" | "keep-this" | "keep-other" | "edited"): Promise<GitActionResult>
 }
 
 export function CommitTooltip(props: {
@@ -38,13 +52,14 @@ export function CommitTooltip(props: {
   const [busy, setBusy] = createSignal(false)
   const [error, setError] = createSignal("")
 
+  const commitID = createMemo(() => props.commit.id)
+
   createEffect(() => {
-    props.commit.id
-    if (props.pickingMerge) return
-    const first = moveTargets(props.snapshot)[0]?.name ?? ""
+    commitID()
+    if (untrack(() => props.pickingMerge)) return
     setMode("idle")
     setName("")
-    setTarget(first)
+    setTarget(untrack(() => moveTargets(props.snapshot)[0]?.name ?? ""))
     setError("")
     setBusy(false)
   })
@@ -65,6 +80,7 @@ export function CommitTooltip(props: {
       setName("")
       return
     }
+    if (result.overwrite || result.conflict) return
     setError(result.message || props.copy.error)
   }
 
@@ -75,41 +91,44 @@ export function CommitTooltip(props: {
       onPointerUp={(event) => event.stopPropagation()}
     >
       <div class="git-graph-tooltip-name">{backupLabel(props.commit)}</div>
+      <hr class="git-graph-tooltip-rule" />
       <Show when={props.actions}>
         <Show
           when={props.pickingMerge}
           fallback={
             <>
-              <div class="git-graph-tooltip-actions mt-2">
-                <button class="git-graph-button" type="button" disabled={busy()} onClick={() => setMode("branch")}>
-                  {props.copy.branchOff}
-                </button>
-                <button class="git-graph-button" type="button" disabled={busy()} onClick={() => run("restore")}>
-                  {props.copy.restoreBackup}
-                </button>
-                <button
-                  class="git-graph-button"
-                  type="button"
-                  disabled={busy() || !canStartMerge(props.snapshot, props.commit.id)}
-                  onClick={() => props.onStartMerge?.()}
-                >
-                  {props.copy.mergeBackups}
-                </button>
-                <Show when={canMoveCurrentBranch(props.snapshot)}>
-                  <button class="git-graph-button" type="button" disabled={busy()} onClick={() => setMode("move")}>
-                    {props.copy.moveBranchTo}
+              <Show when={mode() === "idle"}>
+                <div class="git-graph-tooltip-actions mt-2">
+                  <button class="git-graph-button" type="button" disabled={busy()} onClick={() => setMode("branch")}>
+                    {props.copy.branchOff}
                   </button>
-                </Show>
-                <button
-                  class="git-graph-button"
-                  type="button"
-                  data-kind="danger"
-                  disabled={busy() || !canDeleteBackup(props.snapshot, props.commit.id)}
-                  onClick={() => setMode("delete")}
-                >
-                  {props.copy.deleteBackup}
-                </button>
-              </div>
+                  <button class="git-graph-button" type="button" disabled={busy()} onClick={() => run("restore")}>
+                    {props.copy.restoreBackup}
+                  </button>
+                  <button
+                    class="git-graph-button"
+                    type="button"
+                    disabled={busy() || !canStartMerge(props.snapshot, props.commit.id)}
+                    onClick={() => props.onStartMerge?.()}
+                  >
+                    {props.copy.mergeBackups}
+                  </button>
+                  <Show when={canMoveCurrentBranch(props.snapshot)}>
+                    <button class="git-graph-button" type="button" disabled={busy()} onClick={() => setMode("move")}>
+                      {props.copy.moveBranchTo}
+                    </button>
+                  </Show>
+                  <button
+                    class="git-graph-button"
+                    type="button"
+                    data-kind="danger"
+                    disabled={busy() || !canDeleteBackup(props.snapshot, props.commit.id)}
+                    onClick={() => setMode("delete")}
+                  >
+                    {props.copy.deleteBackup}
+                  </button>
+                </div>
+              </Show>
               <Show when={mode() === "branch"}>
                 <div class="mt-2 flex flex-col gap-1.5">
                   <input
@@ -119,12 +138,12 @@ export function CommitTooltip(props: {
                     disabled={busy()}
                     onInput={(event) => setName(event.currentTarget.value)}
                     onKeyDown={(event) => {
-                      if (event.key !== "Enter") return
+                      if (event.key !== "Enter" || !name().trim()) return
                       void run("branch", { name: name() })
                     }}
                   />
                   <div class="flex flex-wrap gap-1.5">
-                    <button class="git-graph-button" type="button" disabled={busy()} onClick={() => run("branch", { name: name() })}>
+                    <button class="git-graph-button" type="button" disabled={busy() || !name().trim()} onClick={() => run("branch", { name: name() })}>
                       {props.copy.createThread}
                     </button>
                     <button class="git-graph-button" type="button" disabled={busy()} onClick={() => setMode("idle")}>
@@ -135,9 +154,20 @@ export function CommitTooltip(props: {
               </Show>
               <Show when={mode() === "move"}>
                 <div class="mt-2 flex flex-col gap-1.5">
+                  <Show when={props.snapshot.head.detached}>
+                    <div>{props.copy.moveNeedsName}</div>
+                    <input
+                      class="git-graph-button w-full text-left"
+                      value={name()}
+                      placeholder={props.copy.threadName}
+                      disabled={busy()}
+                      onInput={(event) => setName(event.currentTarget.value)}
+                    />
+                  </Show>
                   <div>{props.copy.confirmMove}</div>
+                  <div>{props.copy.moveChoose}</div>
                   <select
-                    class="git-graph-button w-full text-left"
+                    class="git-graph-button git-graph-tooltip-select w-full"
                     value={target()}
                     disabled={busy()}
                     onChange={(event) => setTarget(event.currentTarget.value)}
@@ -146,12 +176,12 @@ export function CommitTooltip(props: {
                       {(branch) => <option value={branch.name}>{branch.name}</option>}
                     </For>
                   </select>
-                  <div class="flex flex-wrap gap-1.5">
+                  <div class="git-graph-tooltip-actions">
                     <button
                       class="git-graph-button"
                       type="button"
-                      disabled={busy() || !target()}
-                      onClick={() => run("move", { target: target() })}
+                      disabled={busy() || !target() || (props.snapshot.head.detached && !name().trim())}
+                      onClick={() => run("move", { target: target(), name: name() })}
                     >
                       {props.copy.moveBranchTo}
                     </button>

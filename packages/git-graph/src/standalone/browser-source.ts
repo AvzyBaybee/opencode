@@ -27,11 +27,61 @@ export function createBrowserGitActions(repo: string, options: BrowserGitSourceO
           name: input.name,
           target: input.target,
           endID: input.endID,
+          force: input.force,
+          paths: input.paths,
         }),
+      })
+      const body = (await response.json()) as {
+        ok?: boolean
+        message?: string
+        overwrite?: boolean
+        conflict?: boolean
+        overwriteFiles?: string[]
+      }
+      if (response.ok && body.ok) return { ok: true }
+      return {
+        ok: false,
+        message: body.message || "There was an error.",
+        overwrite: body.overwrite,
+        conflict: body.conflict,
+        overwriteFiles: body.overwriteFiles,
+      }
+    },
+    init: async (name) => {
+      if (!repo || repo.startsWith("fixture:")) {
+        return { ok: false, message: "This repository cannot be changed here." }
+      }
+      const response = await fetch("/api/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo, name }),
       })
       const body = (await response.json()) as { ok?: boolean; message?: string }
       if (response.ok && body.ok) return { ok: true }
-      return { ok: false, message: body.message || "Git could not complete that action." }
+      return { ok: false, message: body.message || "There was an error." }
+    },
+    resolve: async (how) => {
+      if (!repo || repo.startsWith("fixture:")) {
+        return { ok: false, message: "This repository cannot be changed here." }
+      }
+      const response = await fetch("/api/conflict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo, how }),
+      })
+      const body = (await response.json()) as {
+        ok?: boolean
+        message?: string
+        conflict?: boolean
+        overwriteFiles?: string[]
+      }
+      if (response.ok && body.ok) return { ok: true }
+      return {
+        ok: false,
+        message: body.message || "There was an error.",
+        conflict: body.conflict,
+        overwriteFiles: body.overwriteFiles,
+      }
     },
   }
 }
@@ -59,7 +109,17 @@ export function createBrowserGitSource(repo: string, options: BrowserGitSourceOp
       emit(next)
       return next
     }
-    const response = await fetch(`/api/graph?${query()}`)
+    const response = await fetch(`/api/graph?${query()}`).catch((error: Error) => error)
+    if (response instanceof Error) {
+      const next = emptySnapshot({ worktree: repo, status: { kind: "error", message: response.message } })
+      emit(next)
+      return next
+    }
+    if (!response.ok) {
+      const next = emptySnapshot({ worktree: repo, status: { kind: "error", message: `HTTP ${response.status}` } })
+      emit(next)
+      return next
+    }
     const next = (await response.json()) as GitGraphSnapshot
     emit(next)
     return next

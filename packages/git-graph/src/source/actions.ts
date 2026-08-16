@@ -1,19 +1,13 @@
 import type { GitCommitID, GitGraphCommit, GitGraphSnapshot } from "../domain/contract"
 
-export type GitActionKind = "branch" | "restore" | "delete" | "merge" | "move" | "commit" | "switch"
+export type GitActionKind = "branch" | "restore" | "delete" | "merge" | "move" | "commit" | "switch" | "rename"
 
 export type GitPlan =
   | { readonly ok: true; readonly steps: readonly (readonly string[])[] }
   | { readonly ok: false; readonly reason: string }
 
-const PROTECTED_BRANCHES = new Set(["main", "master", "Custom", "Official"])
-
 export function hasLaterBackups(snapshot: GitGraphSnapshot, commitID: GitCommitID) {
   return snapshot.commits.some((commit) => commit.parents.includes(commitID))
-}
-
-export function isProtectedBranch(name: string) {
-  return PROTECTED_BRANCHES.has(name)
 }
 
 export function canStartMerge(snapshot: GitGraphSnapshot, commitID: GitCommitID) {
@@ -51,8 +45,6 @@ export function moveTargets(snapshot: GitGraphSnapshot) {
 }
 
 export function canMoveCurrentBranch(snapshot: GitGraphSnapshot) {
-  const current = snapshot.head.detached ? undefined : snapshot.head.branch
-  if (!current || isProtectedBranch(current)) return false
   return moveTargets(snapshot).length > 0
 }
 
@@ -64,7 +56,55 @@ export function sanitizeBranchName(raw: string) {
   return cleaned
 }
 
+export function branchNameProblem(raw: string) {
+  const name = raw.trim()
+  if (!name) return "Your backup needs a name."
+  const phrases: string[] = []
+  if (name.startsWith("-")) phrases.push("start with a dash")
+  if (name.startsWith("/")) phrases.push("start with a slash")
+  if (name.includes("..")) phrases.push('contain ".."')
+  if (name.includes("@{")) phrases.push('contain "@{"')
+  if (name.includes("//")) phrases.push('contain "//"')
+  for (const mark of illegalNameMarks(name)) phrases.push(mark)
+  if (name.endsWith("/")) phrases.push("end with a slash")
+  if (name.endsWith(".")) phrases.push("end with a period")
+  if (phrases.length === 0) return
+  if (phrases.length === 1) return `The name can't ${phrases[0]}.`
+  return `The name can't ${phrases.slice(0, -1).join(", ")}, or ${phrases[phrases.length - 1]}.`
+}
+
+function illegalNameMarks(name: string) {
+  const marks: string[] = []
+  const seen = new Set<string>()
+  for (const char of name) {
+    if (!isForbiddenNameChar(char) || seen.has(char)) continue
+    seen.add(char)
+    if (char === " " || char === "\t") marks.push("contain a space")
+    else marks.push(`contain "${char}"`)
+  }
+  return marks
+}
+
+function isForbiddenNameChar(char: string) {
+  return /[\s~^:?*\[\\]/.test(char)
+}
+
 export function planGitAction(input: {
+  snapshot: GitGraphSnapshot
+  kind: GitActionKind
+  commitID?: GitCommitID
+  name?: string
+  target?: string
+  endID?: GitCommitID
+  force?: boolean
+  paths?: readonly string[]
+}): GitPlan {
+  const plan = buildPlan(input)
+  if (!plan.ok || !input.force) return plan
+  return { ok: true, steps: forceSwitchSteps(plan.steps, input.paths) }
+}
+
+function buildPlan(input: {
   snapshot: GitGraphSnapshot
   kind: GitActionKind
   commitID?: GitCommitID
@@ -74,60 +114,85 @@ export function planGitAction(input: {
 }): GitPlan {
   if (input.kind === "commit") return planCommit(input.name)
   if (input.kind === "switch") return planSwitch(input.snapshot, input.target)
+  if (input.kind === "rename") return planRename(input.snapshot, input.target, input.name)
   const commit = input.snapshot.commits.find((item) => item.id === input.commitID)
   if (!commit) return { ok: false, reason: "That backup is not in this graph." }
   if (input.kind === "branch") return planBranch(input.snapshot, commit.id, input.name)
   if (input.kind === "restore") return planRestore(input.snapshot, commit)
   if (input.kind === "delete") return planDelete(input.snapshot, commit.id)
   if (input.kind === "merge") return planMerge(input.snapshot, commit.id, input.endID, input.name)
-  return planMove(input.snapshot, input.target)
+  return planMove(input.snapshot, input.target, input.name)
+}
+
+function forceSwitchSteps(steps: readonly (readonly string[])[], paths: readonly string[] | undefined) {
+  const forced = steps.map((step) => (step[0] === "switch" ? ["switch", "-f", ...step.slice(1)] : [...step]))
+  if (!paths?.length) return forced
+  return [["clean", "-f", "--", ...paths], ...forced]
 }
 
 function planCommit(name: string | undefined): GitPlan {
   const message = name?.trim()
-  if (!message) return { ok: false, reason: "Enter a name for this backup." }
+  if (!message) return { ok: false, reason: "Your backup needs a name." }
   return { ok: true, steps: [["add", "-A"], ["commit", "-m", message]] }
 }
 
 function planSwitch(snapshot: GitGraphSnapshot, target: string | undefined): GitPlan {
-  if (!target) return { ok: false, reason: "Choose a thread to switch to." }
+  if (!target) return { ok: false, reason: "Choose a branch to switch to." }
   if (snapshot.head.branch === target && !snapshot.head.detached) {
     return { ok: true, steps: [] }
   }
   if (!localBranches(snapshot).some((item) => item.name === target)) {
-    return { ok: false, reason: "That thread is not a local branch." }
+    return { ok: false, reason: "That name is not a branch on this computer." }
   }
   return { ok: true, steps: [["switch", target]] }
 }
 
+function planRename(snapshot: GitGraphSnapshot, from: string | undefined, to: string | undefined): GitPlan {
+  if (!from || !localBranches(snapshot).some((item) => item.name === from)) {
+    return { ok: false, reason: "That name is not a branch on this computer." }
+  }
+  const problem = branchNameProblem(to ?? "")
+  if (problem) return { ok: false, reason: problem }
+  const next = (to ?? "").trim()
+  if (next === from) return { ok: true, steps: [] }
+  if (localBranches(snapshot).some((item) => item.name === next)) {
+    return { ok: false, reason: "A branch with that name already exists." }
+  }
+  return { ok: true, steps: [["branch", "-m", from, next]] }
+}
+
 function planBranch(snapshot: GitGraphSnapshot, commitID: GitCommitID, name: string | undefined): GitPlan {
-  const branch = sanitizeBranchName(name ?? "")
-  if (!branch) return { ok: false, reason: "Enter a thread name using letters, numbers, dashes, or slashes." }
+  const problem = branchNameProblem(name ?? "")
+  if (problem) return { ok: false, reason: problem }
+  const branch = (name ?? "").trim()
   if (localBranches(snapshot).some((item) => item.name === branch)) {
-    return { ok: false, reason: "That thread name is already in use." }
+    return { ok: false, reason: "A branch with that name already exists." }
   }
   return { ok: true, steps: [["switch", "-c", branch, commitID]] }
 }
 
 function planRestore(snapshot: GitGraphSnapshot, commit: GitGraphCommit): GitPlan {
-  const branch = localBranches(snapshot).find((item) => item.commitID === commit.id)
-  if (branch) return { ok: true, steps: [["switch", branch.name]] }
-  const name = uniqueRestoreName(snapshot, commit)
-  if (!name) return { ok: false, reason: "Could not name a new thread for this backup." }
-  return { ok: true, steps: [["switch", "-c", name, commit.id]] }
+  const atTip = localBranches(snapshot).find((item) => item.commitID === commit.id)
+  if (atTip) return { ok: true, steps: [["switch", atTip.name]] }
+  const branch = (snapshot.head.detached ? undefined : snapshot.head.branch) || owningThread(snapshot, commit.id)
+  if (!branch) return { ok: false, reason: "That backup is not in this graph." }
+  const steps: string[][] = []
+  if (snapshot.head.branch !== branch || snapshot.head.detached) steps.push(["switch", branch])
+  steps.push(["reset", "--hard", commit.id])
+  return { ok: true, steps }
 }
 
 function planDelete(snapshot: GitGraphSnapshot, commitID: GitCommitID): GitPlan {
   const commit = snapshot.commits.find((item) => item.id === commitID)
   const parent = commit?.parents[0]
-  if (!parent) return { ok: false, reason: "The first backup cannot be deleted." }
+  if (!parent) return { ok: false, reason: "You can't delete the first backup. This is the foundation of all other backups." }
   const branch = owningThread(snapshot, commitID)
   if (!branch) {
-    return { ok: false, reason: "No local thread holds this backup, so it cannot be deleted here." }
+    return { ok: false, reason: "This backup is not on a branch on this computer, so it cannot be deleted here." }
   }
   const steps: string[][] = []
   if (snapshot.head.branch !== branch || snapshot.head.detached) steps.push(["switch", branch])
-  steps.push(["reset", "--hard", parent])
+  steps.push(["reset", "--soft", parent])
   return { ok: true, steps }
 }
 
@@ -143,27 +208,24 @@ function planMerge(
   }
   const oldest = range[0]!
   const newest = range[range.length - 1]!
-  const oldestCommit = snapshot.commits.find((item) => item.id === oldest)
-  const parent = oldestCommit?.parents[0]
-  if (!parent) return { ok: false, reason: "Nothing earlier to merge these backups into." }
   const branch = owningThread(snapshot, newest)
-  if (!branch) return { ok: false, reason: "No local thread holds these backups, so they cannot be merged here." }
+  if (!branch) return { ok: false, reason: "These backups are not on a branch on this computer, so they cannot be merged here." }
   const tip = localBranches(snapshot).find((item) => item.name === branch)?.commitID
   if (!tip || (tip !== newest && !isLaterOnThread(snapshot, newest, tip))) {
-    return { ok: false, reason: "No local thread holds these backups, so they cannot be merged here." }
+    return { ok: false, reason: "These backups are not on a branch on this computer, so they cannot be merged here." }
   }
   const message = name?.trim()
-  if (!message) return { ok: false, reason: "Enter a name for the merged backup." }
+  if (!message) return { ok: false, reason: "Your backup needs a name." }
   const steps: string[][] = []
   if (snapshot.head.branch !== branch || snapshot.head.detached) steps.push(["switch", branch])
   if (tip === newest) {
-    steps.push(["reset", "--soft", parent], ["commit", "-m", message])
+    steps.push(["reset", "--soft", oldest], ["commit", "--amend", "-m", message])
     return { ok: true, steps }
   }
   steps.push(
     ["switch", "--detach", newest],
-    ["reset", "--soft", parent],
-    ["commit", "-m", message],
+    ["reset", "--soft", oldest],
+    ["commit", "--amend", "-m", message],
     ["rebase", "--onto", "HEAD", newest, branch],
     ["switch", branch],
   )
@@ -194,38 +256,28 @@ function firstParentChain(snapshot: GitGraphSnapshot, newerID: GitCommitID, olde
   }
 }
 
-function planMove(snapshot: GitGraphSnapshot, target: string | undefined): GitPlan {
-  const current = snapshot.head.detached ? undefined : snapshot.head.branch
-  if (!current) return { ok: false, reason: "Restore a named thread before moving it." }
-  if (isProtectedBranch(current)) {
-    return { ok: false, reason: "This line is kept. Move a side branch onto it instead." }
-  }
-  if (!target || target === current) return { ok: false, reason: "Choose another thread to move onto." }
+function planMove(snapshot: GitGraphSnapshot, target: string | undefined, name: string | undefined): GitPlan {
+  const named = snapshot.head.detached ? undefined : snapshot.head.branch
+  const steps: string[][] = []
+  const current = named ?? namedFromMove(snapshot, name, steps)
+  if (typeof current !== "string") return current
+  if (!target || target === current) return { ok: false, reason: "Choose another branch to move onto." }
   if (!localBranches(snapshot).some((item) => item.name === target)) {
-    return { ok: false, reason: "That thread is not a local branch." }
+    return { ok: false, reason: "That name is not a branch on this computer." }
   }
-  return {
-    ok: true,
-    steps: [
-      ["rebase", target],
-      ["switch", target],
-      ["merge", "--ff-only", current],
-      ["branch", "-D", current],
-    ],
-  }
+  steps.push(["rebase", target], ["switch", target], ["merge", "--ff-only", current], ["branch", "-D", current])
+  return { ok: true, steps }
 }
 
-function uniqueRestoreName(snapshot: GitGraphSnapshot, commit: GitGraphCommit) {
-  const taken = new Set(localBranches(snapshot).map((item) => item.name))
-  const short = commit.id.slice(0, 7)
-  const base = sanitizeBranchName(commit.subject) || sanitizeBranchName(`from-${short}`)
-  if (base && !taken.has(base)) return base
-  const withId = sanitizeBranchName(`${base ?? "from"}-${short}`) || sanitizeBranchName(`from-${short}`)
-  if (withId && !taken.has(withId)) return withId
-  if (!withId) return
-  let n = 2
-  while (taken.has(`${withId}-${n}`)) n += 1
-  return `${withId}-${n}`
+function namedFromMove(snapshot: GitGraphSnapshot, name: string | undefined, steps: string[][]): string | GitPlan {
+  const problem = branchNameProblem(name ?? "")
+  if (problem) return { ok: false, reason: problem }
+  const branch = (name ?? "").trim()
+  if (localBranches(snapshot).some((item) => item.name === branch)) {
+    return { ok: false, reason: "A branch with that name already exists." }
+  }
+  steps.push(["switch", "-c", branch])
+  return branch
 }
 
 function owningThread(snapshot: GitGraphSnapshot, commitID: GitCommitID) {

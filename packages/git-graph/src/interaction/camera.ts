@@ -1,7 +1,7 @@
 import { createSignal } from "solid-js"
 import type { GitCommitID } from "../domain/contract"
 import type { GraphLayout } from "../layout"
-import { createCamera, hitTestCommit, hitTestEdge, screenToWorld, type Camera } from "../render/canvas"
+import { createCamera, hitTestCommit, hitTestEdge, hitTestLocalLabel, screenToWorld, type Camera } from "../render/canvas"
 
 const FLY_MS = 300
 
@@ -11,6 +11,7 @@ export type GraphInteraction = {
   hoveringID: () => string | undefined
   hoveringEdgeKey: () => string | undefined
   selectedEdgeKey: () => string | undefined
+  hoveringLabel: () => string | undefined
   pan: (dx: number, dy: number) => void
   zoomAt: (screenX: number, screenY: number, factor: number) => void
   selectAt: (layout: GraphLayout, screenX: number, screenY: number) => string | undefined
@@ -30,6 +31,7 @@ export function createGraphInteraction(initial?: Partial<Camera>): GraphInteract
   const [selectedID, setSelectedID] = createSignal<string>()
   const [hoveringID, setHoveringID] = createSignal<string>()
   const [hoveringEdgeKey, setHoveringEdgeKey] = createSignal<string>()
+  const [hoveringLabel, setHoveringLabel] = createSignal<string>()
   const [selectedEdgeKey, setSelectedEdgeKey] = createSignal<string>()
   let flyHandle = 0
 
@@ -44,6 +46,7 @@ export function createGraphInteraction(initial?: Partial<Camera>): GraphInteract
     selectedID,
     hoveringID,
     hoveringEdgeKey,
+    hoveringLabel,
     selectedEdgeKey,
     pan: (dx, dy) => {
       cancelFly()
@@ -84,6 +87,14 @@ export function createGraphInteraction(initial?: Partial<Camera>): GraphInteract
     },
     hoverAt: (layout, screenX, screenY) => {
       const world = screenToWorld(camera(), screenX, screenY)
+      const label = hitTestLocalLabel(layout, world.x, world.y)
+      if (label) {
+        setHoveringLabel(label)
+        setHoveringID(undefined)
+        setHoveringEdgeKey(undefined)
+        return
+      }
+      setHoveringLabel(undefined)
       const commit = hitTestCommit(layout, world.x, world.y)
       if (commit) {
         setHoveringID(commit.id)
@@ -97,6 +108,7 @@ export function createGraphInteraction(initial?: Partial<Camera>): GraphInteract
     clearHover: () => {
       setHoveringID(undefined)
       setHoveringEdgeKey(undefined)
+      setHoveringLabel(undefined)
     },
     clearSelection: () => {
       setSelectedID(undefined)

@@ -1,3 +1,9 @@
 - Inquire about commit messages and patch notes.
 
 - Consider establishing a method of running the software that automatically triggers.
+
+- Add proper error messages for Git Graph.
+
+- Make popup to create backup centered.
+
+- Plug in Git Graph to OpenCode.

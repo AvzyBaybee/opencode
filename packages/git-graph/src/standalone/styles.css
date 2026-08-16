@@ -1,14 +1,19 @@
 @import "tailwindcss";
+@import "../compat/git-graph.css";
 
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
+  background: #141414;
+  color-scheme: dark;
 }
 
-body {
-  background: #080808;
+#root {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
 }
 
 * {
