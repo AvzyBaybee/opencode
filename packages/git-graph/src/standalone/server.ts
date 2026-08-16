@@ -115,8 +115,16 @@ const server = Bun.serve({
         paths: body.paths,
       })
       if (!plan.ok) return Response.json({ ok: false, message: plan.reason }, { status: 400, headers: cors() })
-      for (const args of plan.steps) {
-        const result = await bunGitRunner(args, snapshot.worktree)
+      const steps = [...plan.steps]
+      if (body.kind === "commit" && body.cloud) {
+        const remote = await firstRemote(snapshot.worktree)
+        if (!remote) {
+          return Response.json({ ok: false, message: "This folder is not connected to GitHub." }, { status: 400, headers: cors() })
+        }
+        steps.push(["push", "--no-verify", "-u", remote, "HEAD"])
+      }
+      for (const args of steps) {
+        const result = await bunGitRunner(args, snapshot.worktree, args[0] === "push" ? { GIT_TERMINAL_PROMPT: "0" } : undefined)
         if (result.exitCode === 0) continue
         const gitDir = await bunGitRunner(["rev-parse", "--git-dir"], snapshot.worktree)
         const dir = gitDir.exitCode === 0 ? resolveGitDir(snapshot.worktree, gitDir.stdout.trim()) : ""
@@ -147,7 +155,7 @@ const server = Bun.serve({
         }
         return Response.json({ ok: true }, { headers: cors() })
       }
-      await syncCloud(snapshot.worktree, body.kind, body.cloud)
+      await syncCloud(snapshot.worktree, body.kind)
       return Response.json({ ok: true }, { headers: cors() })
     }
 
@@ -290,24 +298,28 @@ function resolveGitDir(worktree: string, gitDir: string) {
   return join(worktree, gitDir)
 }
 
-async function pushAllToCloud(worktree: string) {
+async function firstRemote(worktree: string) {
   const remotes = await bunGitRunner(["remote"], worktree)
-  const remote = remotes.stdout.split(/\s+/).map((item) => item.trim()).find(Boolean)
+  return remotes.stdout.split(/\s+/).map((item) => item.trim()).find(Boolean)
+}
+
+async function pushAllToCloud(worktree: string) {
+  const remote = await firstRemote(worktree)
   if (!remote) return { ok: false as const, message: "This folder is not connected to GitHub." }
-  const result = await bunGitRunner(["push", "-u", remote, "--all"], worktree)
+  const result = await bunGitRunner(["push", "--no-verify", "-u", remote, "--all"], worktree, { GIT_TERMINAL_PROMPT: "0" })
   if (result.exitCode === 0) return { ok: true as const }
   return { ok: false as const, message: explainGitFailure("publish", result.stdout, result.stderr).message }
 }
 
-async function syncCloud(worktree: string, kind: GitActionKind, cloud?: boolean) {
-  if (kind === "switch" || kind === "publish") return
-  if (kind === "commit" && !cloud) return
-  const remotes = await bunGitRunner(["remote"], worktree)
-  const remote = remotes.stdout.split(/\s+/).map((item) => item.trim()).find(Boolean)
+async function syncCloud(worktree: string, kind: GitActionKind) {
+  if (kind === "switch" || kind === "publish" || kind === "commit") return
+  const remote = await firstRemote(worktree)
   if (!remote) return
   const named = await bunGitRunner(["symbolic-ref", "--quiet", "--short", "HEAD"], worktree)
   if (named.exitCode !== 0) return
   const rewrite = kind === "delete" || kind === "restore" || kind === "merge" || kind === "move"
-  const args = rewrite ? ["push", "--force-with-lease", remote, "HEAD"] : ["push", "-u", remote, "HEAD"]
-  await bunGitRunner(args, worktree)
+  const args = rewrite
+    ? ["push", "--no-verify", "--force-with-lease", remote, "HEAD"]
+    : ["push", "--no-verify", "-u", remote, "HEAD"]
+  await bunGitRunner(args, worktree, { GIT_TERMINAL_PROMPT: "0" })
 }

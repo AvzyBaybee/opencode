@@ -252,6 +252,14 @@
   text-align: center;
 }
 
+.git-graph-push-error {
+  color: var(--git-graph-text-weak);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+  white-space: normal;
+}
+
 .git-graph-path-pop {
   width: 220px;
   padding: 10px;

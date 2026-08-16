@@ -11,6 +11,9 @@ export function explainGitFailure(kind: GitActionKind, stdout: string, stderr: s
   if (/no space left on device|disk quota exceeded/i.test(text)) {
     return { message: "Your disk is full. There's no space to make a backup." }
   }
+  if (/authentication failed|could not read username|permission denied \(publickey\)|repository not found|could not find remote|no upstream/i.test(text)) {
+    return { message: "GitHub did not accept this backup. Check that this folder is connected to GitHub." }
+  }
   if (/permission denied|read-only file system|unable to write|cannot unlink|index\.lock|file exists/i.test(text)) {
     return { message: "The file is locked. Is it in use somewhere else? Is there permission issues? Is it read-only?" }
   }
@@ -22,12 +25,20 @@ export function explainGitFailure(kind: GitActionKind, stdout: string, stderr: s
     const files = parseOverwriteFiles(text)
     return { message: conflictPrompt(files).body, conflict: true, overwriteFiles: files }
   }
-  const line = text
-    .split("\n")
-    .map((item) => item.trim().replace(/^(fatal|error):\s*/i, ""))
-    .find(Boolean)
+  if (/hook declined|pre-push|pre-commit/i.test(text)) {
+    return { message: "GitHub did not get this backup because a check in this folder blocked the send." }
+  }
+  const line = preferredGitLine(text)
   if (line) return { message: `There was an error: ${line}` }
   return { message: "There was an error." }
+}
+
+function preferredGitLine(text: string) {
+  const lines = text
+    .split("\n")
+    .map((item) => item.trim().replace(/^(fatal|error):\s*/i, ""))
+    .filter((item) => item && !item.startsWith("$") && !item.startsWith(">") && !item.startsWith("bun turbo"))
+  return lines.find((item) => /^(error|fatal)/i.test(item)) || lines.at(-1) || lines[0]
 }
 
 export function parseOverwriteFiles(text: string) {

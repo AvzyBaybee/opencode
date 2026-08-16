@@ -210,7 +210,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     const { width, height } = size()
     if (!current || current.status.kind !== "ready" || !currentLayout) return
     if (width < 2 || height < 2) return
-    const key = `${current.repositoryRoot}:${current.commits.length}:${current.refs.length}:${width}x${height}`
+    const key = `${current.repositoryRoot}:${width}x${height}`
     if (fittedFor === key) return
     fittedFor = key
     interaction.fitTips(currentLayout, width, height)
@@ -441,12 +441,13 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
   const startBackup = () => {
     const name = backupName().trim()
+    const toCloud = backupPlace() === "cloud"
     if (!hostActions() || chromeBusy() || !name) return
     cancelNaming()
-    void runChrome("commit", { name })
+    void runChrome("commit", { name, cloud: toCloud })
   }
 
-  const runChrome = async (kind: "commit" | "switch", extras?: { name?: string; target?: string }) => {
+  const runChrome = async (kind: "commit" | "switch", extras?: { name?: string; target?: string; cloud?: boolean }) => {
     if (!hostActions() || chromeBusy()) return
     setChromeBusy(true)
     setChromeError("")
@@ -455,7 +456,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       kind,
       name: extras?.name,
       target: extras?.target,
-      cloud: kind === "commit" && backupPlace() === "cloud",
+      cloud: extras?.cloud === true,
     })
     if (result.ok) await props.source.refresh()
     setChromeBusy(false)
@@ -772,9 +773,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
             {copy().pushAllToCloud}
           </button>
           <Show when={!namingBackup() && !pickingBackupPlace() && chromeError()}>
-            {(text) => (
-              <div style={{ color: "var(--git-graph-text-weak)", "font-size": "11px", "text-align": "right" }}>{text()}</div>
-            )}
+            {(text) => <div class="git-graph-push-error">{text()}</div>}
           </Show>
         </div>
       </Show>

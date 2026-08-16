@@ -32,6 +32,12 @@ Aborting`
     )
   })
 
+  test("does not treat a hook command echo as the error", () => {
+    expect(
+      explainGitFailure("commit", "", "$ bun turbo typecheck\nhusky - pre-push hook declined\n").message,
+    ).toBe("GitHub did not get this backup because a check in this folder blocked the send.")
+  })
+
   test("maps identity, lock, and disk-full failures", () => {
     expect(explainGitFailure("commit", "", "fatal: please tell me who you are").message).toBe(
       "You need a name & email address to create a backup.",
