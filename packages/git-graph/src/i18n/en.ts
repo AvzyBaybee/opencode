@@ -38,6 +38,7 @@ export type GitGraphCopy = {
   readonly threadName: string
   readonly cancel: string
   readonly createBackup: string
+  readonly savingBackup: string
   readonly backupName: string
   readonly goToHead: string
   readonly noBranch: string
@@ -87,6 +88,7 @@ export const en: GitGraphCopy = {
   threadName: "Branch name",
   cancel: "Cancel",
   createBackup: "Create backup",
+  savingBackup: "Saving backup…",
   backupName: "Backup name",
   goToHead: "Go to most recent backup",
   noBranch: "No branch name",

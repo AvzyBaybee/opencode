@@ -158,6 +158,28 @@
   max-width: min(280px, 42vw);
 }
 
+.git-graph-saving {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 22;
+  transform: translateX(-50%);
+  color: #e8e8e8;
+  font-size: 13px;
+  animation: git-graph-saving-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes git-graph-saving-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .git-graph-merge-overlay {
   position: absolute;
   inset: 0;

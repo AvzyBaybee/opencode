@@ -283,7 +283,7 @@ function resolveGitDir(worktree: string, gitDir: string) {
 }
 
 async function syncCloud(worktree: string, kind: GitActionKind) {
-  if (kind === "switch") return
+  if (kind === "switch" || kind === "commit") return
   const remotes = await bunGitRunner(["remote"], worktree)
   const remote = remotes.stdout.split(/\s+/).map((item) => item.trim()).find(Boolean)
   if (!remote) return

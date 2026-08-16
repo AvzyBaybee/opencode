@@ -34,6 +34,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   const [mergeBusy, setMergeBusy] = createSignal(false)
   const [mergeError, setMergeError] = createSignal("")
   const [namingBackup, setNamingBackup] = createSignal(false)
+  const [savingBackup, setSavingBackup] = createSignal(false)
   const [backupName, setBackupName] = createSignal("")
   const [chromeBusy, setChromeBusy] = createSignal(false)
   const [chromeError, setChromeError] = createSignal("")
@@ -416,21 +417,27 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     setMergeError(result.message || copy().error)
   }
 
+  const startBackup = () => {
+    const name = backupName().trim()
+    if (!hostActions() || chromeBusy() || !name) return
+    cancelNaming()
+    void runChrome("commit", { name })
+  }
+
   const runChrome = async (kind: "commit" | "switch", extras?: { name?: string; target?: string }) => {
     if (!hostActions() || chromeBusy()) return
     setChromeBusy(true)
     setChromeError("")
+    if (kind === "commit") setSavingBackup(true)
     const result = await hostActions()!.run({
       kind,
       name: extras?.name,
       target: extras?.target,
     })
+    if (result.ok) await props.source.refresh()
     setChromeBusy(false)
-    if (result.ok) {
-      setNamingBackup(false)
-      setBackupName("")
-      return
-    }
+    setSavingBackup(false)
+    if (result.ok) return
     if (result.overwrite || result.conflict) return
     setChromeError(result.message || copy().error)
   }
@@ -647,7 +654,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
                   return
                 }
                 if (event.key !== "Enter" || !backupName().trim()) return
-                void runChrome("commit", { name: backupName() })
+                startBackup()
               }}
             />
             <Show when={chromeError()}>
@@ -662,7 +669,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
                 class="git-graph-button"
                 type="button"
                 disabled={chromeBusy() || !backupName().trim()}
-                onClick={() => void runChrome("commit", { name: backupName() })}
+                onClick={startBackup}
               >
                 {copy().createBackup}
               </button>
@@ -672,6 +679,10 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
             </div>
           </div>
         </div>
+      </Show>
+
+      <Show when={savingBackup()}>
+        <div class="git-graph-saving">{copy().savingBackup}</div>
       </Show>
 
       <Show when={message()}>
