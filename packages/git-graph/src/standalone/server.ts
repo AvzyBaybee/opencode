@@ -140,7 +140,14 @@ const server = Bun.serve({
           { status: 400, headers: cors() },
         )
       }
-      await syncCloud(snapshot.worktree, body.kind)
+      if (body.kind === "publish") {
+        const pushed = await pushAllToCloud(snapshot.worktree)
+        if (!pushed.ok) {
+          return Response.json({ ok: false, message: pushed.message }, { status: 400, headers: cors() })
+        }
+        return Response.json({ ok: true }, { headers: cors() })
+      }
+      await syncCloud(snapshot.worktree, body.kind, body.cloud)
       return Response.json({ ok: true }, { headers: cors() })
     }
 
@@ -255,7 +262,7 @@ function readActionBody(input: unknown) {
   const kind = "kind" in input && isActionKind(input.kind) ? input.kind : undefined
   const commitID = "commitID" in input && typeof input.commitID === "string" ? input.commitID : undefined
   if (!repo || !kind) return
-  if (kind !== "commit" && kind !== "switch" && !commitID) return
+  if (kind !== "commit" && kind !== "switch" && kind !== "publish" && !commitID) return
   const name = "name" in input && typeof input.name === "string" ? input.name : undefined
   const target = "target" in input && typeof input.target === "string" ? input.target : undefined
   const endID = "endID" in input && typeof input.endID === "string" ? input.endID : undefined
@@ -264,13 +271,14 @@ function readActionBody(input: unknown) {
     "paths" in input && Array.isArray(input.paths)
       ? input.paths.filter((item): item is string => typeof item === "string")
       : undefined
+  const cloud = "cloud" in input && input.cloud === true
   const scope = parseScope("scope" in input && typeof input.scope === "string" ? input.scope : undefined)
   const maxCommits = parseMaxCommits("max" in input && typeof input.max === "string" ? input.max : undefined)
-  return { repo, kind, commitID, name, target, endID, force, paths, scope, maxCommits }
+  return { repo, kind, commitID, name, target, endID, force, cloud, paths, scope, maxCommits }
 }
 
 function isActionKind(value: unknown): value is GitActionKind {
-  return value === "branch" || value === "restore" || value === "delete" || value === "merge" || value === "move" || value === "commit" || value === "switch" || value === "rename"
+  return value === "branch" || value === "restore" || value === "delete" || value === "merge" || value === "move" || value === "commit" || value === "switch" || value === "rename" || value === "publish"
 }
 
 function isConflictHow(value: unknown): value is ConflictHow {
@@ -282,8 +290,18 @@ function resolveGitDir(worktree: string, gitDir: string) {
   return join(worktree, gitDir)
 }
 
-async function syncCloud(worktree: string, kind: GitActionKind) {
-  if (kind === "switch" || kind === "commit") return
+async function pushAllToCloud(worktree: string) {
+  const remotes = await bunGitRunner(["remote"], worktree)
+  const remote = remotes.stdout.split(/\s+/).map((item) => item.trim()).find(Boolean)
+  if (!remote) return { ok: false as const, message: "This folder is not connected to GitHub." }
+  const result = await bunGitRunner(["push", "-u", remote, "--all"], worktree)
+  if (result.exitCode === 0) return { ok: true as const }
+  return { ok: false as const, message: explainGitFailure("publish", result.stdout, result.stderr).message }
+}
+
+async function syncCloud(worktree: string, kind: GitActionKind, cloud?: boolean) {
+  if (kind === "switch" || kind === "publish") return
+  if (kind === "commit" && !cloud) return
   const remotes = await bunGitRunner(["remote"], worktree)
   const remote = remotes.stdout.split(/\s+/).map((item) => item.trim()).find(Boolean)
   if (!remote) return

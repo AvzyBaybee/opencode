@@ -1,6 +1,6 @@
 import type { GitCommitID, GitGraphCommit, GitGraphSnapshot } from "../domain/contract"
 
-export type GitActionKind = "branch" | "restore" | "delete" | "merge" | "move" | "commit" | "switch" | "rename"
+export type GitActionKind = "branch" | "restore" | "delete" | "merge" | "move" | "commit" | "switch" | "rename" | "publish"
 
 export type GitPlan =
   | { readonly ok: true; readonly steps: readonly (readonly string[])[] }
@@ -46,6 +46,10 @@ export function moveTargets(snapshot: GitGraphSnapshot) {
 
 export function canMoveCurrentBranch(snapshot: GitGraphSnapshot) {
   return moveTargets(snapshot).length > 0
+}
+
+export function hasDiskBackups(snapshot: GitGraphSnapshot) {
+  return snapshot.commits.some((commit) => commit.onCloud !== true)
 }
 
 export function sanitizeBranchName(raw: string) {
@@ -115,6 +119,7 @@ function buildPlan(input: {
   if (input.kind === "commit") return planCommit(input.name)
   if (input.kind === "switch") return planSwitch(input.snapshot, input.target)
   if (input.kind === "rename") return planRename(input.snapshot, input.target, input.name)
+  if (input.kind === "publish") return { ok: true, steps: [] }
   const commit = input.snapshot.commits.find((item) => item.id === input.commitID)
   if (!commit) return { ok: false, reason: "That backup is not in this graph." }
   if (input.kind === "branch") return planBranch(input.snapshot, commit.id, input.name)

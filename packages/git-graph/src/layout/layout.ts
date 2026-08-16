@@ -160,7 +160,7 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
       branches: item.branches,
       labels: item.labels,
       committerAt: item.commit.committerAt,
-      onCloud: item.commit.onCloud !== false,
+      onCloud: item.commit.onCloud === true,
     })
   }
 

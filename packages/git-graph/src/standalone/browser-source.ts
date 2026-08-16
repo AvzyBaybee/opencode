@@ -28,6 +28,7 @@ export function createBrowserGitActions(repo: string, options: BrowserGitSourceO
           target: input.target,
           endID: input.endID,
           force: input.force,
+          cloud: input.cloud,
           paths: input.paths,
         }),
       })

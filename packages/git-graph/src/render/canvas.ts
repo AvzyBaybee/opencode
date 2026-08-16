@@ -1,5 +1,6 @@
 import type { CommitLabel, GraphLayout, GraphPoint, LaidOutCommit, StemRun } from "../layout"
 import { colorForLane } from "./lane-color"
+import { drawBackupPlaceMark } from "./backup-mark"
 
 export type Camera = {
   readonly x: number
@@ -278,9 +279,6 @@ function drawCommit(
     ctx.globalAlpha = 0.34
     ctx.fill()
     ctx.globalAlpha = 1
-  } else if (!commit.onCloud) {
-    ctx.fillStyle = "rgba(70,70,70,0.45)"
-    ctx.fill()
   } else {
     ctx.fillStyle = colors.cardFill
     ctx.fill()
@@ -303,6 +301,7 @@ function drawCommit(
   ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui, sans-serif`
   ctx.fillStyle = colors.label
   ctx.fillText(commit.lines[0] ?? "", commit.x, commit.y)
+  drawBackupPlaceMark(ctx, commit, colors.focus, colors.pillTag)
   ctx.textAlign = "left"
   ctx.textBaseline = "top"
   ctx.restore()

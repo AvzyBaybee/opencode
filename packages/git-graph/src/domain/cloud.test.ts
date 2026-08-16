@@ -18,6 +18,15 @@ describe("cloud backup flags", () => {
     const flagged = withCloudFlags([commit("c1", ["c0"]), commit("c0", [])], [])
     expect(flagged.every((item) => item.onCloud === false)).toBe(true)
   })
+
+  test("does not treat a newer local backup as on the cloud", () => {
+    const flagged = withCloudFlags(
+      [commit("c2", ["c1"]), commit("c1", ["c0"]), commit("c0", [])],
+      ["c1"],
+    )
+    expect(flagged.find((item) => item.id === "c2")?.onCloud).toBe(false)
+    expect(flagged.find((item) => item.id === "c1")?.onCloud).toBe(true)
+  })
 })
 
 function commit(id: string, parents: string[]): GitGraphCommit {

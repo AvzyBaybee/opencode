@@ -8,8 +8,11 @@ import "../compat/git-graph.css"
 import { PathPopup } from "../details/path-popup"
 import { CommitTooltip, type GitActionRequest, type GitGraphActions } from "../details/commit-tooltip"
 import { en, statusMessage, type GitGraphCopy } from "../i18n/en"
-import { expandMergeRange, localBranchNames } from "../source/actions"
+import { expandMergeRange, hasDiskBackups, localBranchNames } from "../source/actions"
 import { overwritePrompt, conflictPrompt } from "../source/git-error"
+
+const cloudIcon = new URL("../render/icons/cloud.svg", import.meta.url).href
+const driveIcon = new URL("../render/icons/hard-drive.svg", import.meta.url).href
 
 export type GitGraphPanelProps = {
   readonly source: GitGraphSource
@@ -34,7 +37,10 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   const [mergeBusy, setMergeBusy] = createSignal(false)
   const [mergeError, setMergeError] = createSignal("")
   const [namingBackup, setNamingBackup] = createSignal(false)
+  const [pickingBackupPlace, setPickingBackupPlace] = createSignal(false)
+  const [backupPlace, setBackupPlace] = createSignal<"cloud" | "disk">()
   const [savingBackup, setSavingBackup] = createSignal(false)
+  const [pushingCloud, setPushingCloud] = createSignal(false)
   const [backupName, setBackupName] = createSignal("")
   const [chromeBusy, setChromeBusy] = createSignal(false)
   const [chromeError, setChromeError] = createSignal("")
@@ -255,6 +261,12 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     }
   })
 
+  const showPushAll = createMemo(() => {
+    const current = snapshot()
+    if (!current || current.status.kind !== "ready" || !hostActions()) return false
+    return hasDiskBackups(current)
+  })
+
   const cancelOverwrite = () => {
     setOverwrite(undefined)
     setOverwriteName("")
@@ -349,7 +361,17 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   }
 
   const cancelNaming = () => {
+    setPickingBackupPlace(false)
     setNamingBackup(false)
+    setBackupPlace(undefined)
+    setBackupName("")
+    setChromeError("")
+  }
+
+  const chooseBackupPlace = (place: "cloud" | "disk") => {
+    setBackupPlace(place)
+    setPickingBackupPlace(false)
+    setNamingBackup(true)
     setBackupName("")
     setChromeError("")
   }
@@ -433,12 +455,26 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       kind,
       name: extras?.name,
       target: extras?.target,
+      cloud: kind === "commit" && backupPlace() === "cloud",
     })
     if (result.ok) await props.source.refresh()
     setChromeBusy(false)
     setSavingBackup(false)
     if (result.ok) return
     if (result.overwrite || result.conflict) return
+    setChromeError(result.message || copy().error)
+  }
+
+  const runPushAll = async () => {
+    if (!hostActions() || chromeBusy()) return
+    setChromeBusy(true)
+    setPushingCloud(true)
+    setChromeError("")
+    const result = await hostActions()!.run({ kind: "publish" })
+    if (result.ok) await props.source.refresh()
+    setChromeBusy(false)
+    setPushingCloud(false)
+    if (result.ok) return
     setChromeError(result.message || copy().error)
   }
 
@@ -597,7 +633,9 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               type="button"
               disabled={chromeBusy() || !hostActions()}
               onClick={() => {
-                setNamingBackup(true)
+                setPickingBackupPlace(true)
+                setNamingBackup(false)
+                setBackupPlace(undefined)
                 setBackupName("")
                 setChromeError("")
               }}
@@ -621,7 +659,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
                 {(name) => <option value={name}>{name}</option>}
               </For>
             </select>
-            <Show when={!namingBackup() && chromeError()}>
+            <Show when={!namingBackup() && !pickingBackupPlace() && !hasDiskBackups(snapshot()!) && chromeError()}>
               {(text) => (
                 <div style={{ color: "var(--git-graph-text-weak)", "font-size": "11px" }}>{text()}</div>
               )}
@@ -630,6 +668,41 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
           <button class="git-graph-button" type="button" disabled={!snapshot()?.head.commitID} onClick={goToHead}>
             {copy().goToHead}
           </button>
+        </div>
+      </Show>
+
+      <Show when={pickingBackupPlace()}>
+        <div
+          class="git-graph-merge-overlay"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          <div
+            class="git-graph-merge-dialog git-graph-place-dialog"
+            style={{ "text-align": "center" }}
+            tabIndex={0}
+            autofocus
+            onKeyDown={(event) => {
+              if (event.key === "Escape") cancelNaming()
+            }}
+          >
+            <div class="text-[13px] font-medium">{copy().createBackup}</div>
+            <div class="git-graph-place-row">
+              <button class="git-graph-button git-graph-place-button" type="button" onClick={() => chooseBackupPlace("cloud")}>
+                <img src={cloudIcon} alt="" />
+                {copy().backupCloud}
+              </button>
+              <button class="git-graph-button git-graph-place-button" type="button" onClick={() => chooseBackupPlace("disk")}>
+                <img src={driveIcon} alt="" />
+                {copy().backupDisk}
+              </button>
+            </div>
+            <div class="git-graph-tooltip-actions mt-3">
+              <button class="git-graph-button" type="button" onClick={cancelNaming}>
+                {copy().cancel}
+              </button>
+            </div>
+          </div>
         </div>
       </Show>
 
@@ -683,6 +756,27 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
       <Show when={savingBackup()}>
         <div class="git-graph-saving">{copy().savingBackup}</div>
+      </Show>
+
+      <Show when={pushingCloud()}>
+        <div class="git-graph-saving">{copy().pushingCloud}</div>
+      </Show>
+
+      <Show when={showPushAll()}>
+        <div
+          class="git-graph-push-cloud"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          <button class="git-graph-button" type="button" disabled={chromeBusy()} onClick={() => void runPushAll()}>
+            {copy().pushAllToCloud}
+          </button>
+          <Show when={!namingBackup() && !pickingBackupPlace() && chromeError()}>
+            {(text) => (
+              <div style={{ color: "var(--git-graph-text-weak)", "font-size": "11px", "text-align": "right" }}>{text()}</div>
+            )}
+          </Show>
+        </div>
       </Show>
 
       <Show when={message()}>

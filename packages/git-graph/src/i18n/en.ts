@@ -40,12 +40,16 @@ export type GitGraphCopy = {
   readonly createBackup: string
   readonly savingBackup: string
   readonly backupName: string
+  readonly backupCloud: string
+  readonly backupDisk: string
   readonly goToHead: string
   readonly noBranch: string
   readonly noGit: string
   readonly makeGit: string
   readonly firstThreadName: string
   readonly renameBranch: string
+  readonly pushAllToCloud: string
+  readonly pushingCloud: string
 }
 
 export const en: GitGraphCopy = {
@@ -90,12 +94,16 @@ export const en: GitGraphCopy = {
   createBackup: "Create backup",
   savingBackup: "Saving backup…",
   backupName: "Backup name",
+  backupCloud: "Cloud",
+  backupDisk: "Disk",
   goToHead: "Go to most recent backup",
   noBranch: "No branch name",
   noGit: "This folder has no Git repository. Would you like to make one?",
   makeGit: "Create",
   firstThreadName: "Branch name",
   renameBranch: "Rename",
+  pushAllToCloud: "Push all backups to cloud",
+  pushingCloud: "Pushing backups to cloud…",
 }
 
 export function statusMessage(copy: GitGraphCopy, kind: string, fallback?: string) {

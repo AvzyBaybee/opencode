@@ -170,11 +170,10 @@ async function withRemoteCloudFlags(
   worktree: string,
   commits: GitGraphSnapshot["commits"],
 ) {
-  const rev = await run(["rev-list", "--remotes"], worktree)
-  if (rev.exitCode !== 0) return withCloudFlags(commits, [])
-  const onCloud = new Set(rev.stdout.split(/\s+/).filter(Boolean))
-  if (onCloud.size === 0) return withCloudFlags(commits, [])
-  return commits.map((commit) => ({ ...commit, onCloud: onCloud.has(commit.id) }))
+  const refs = await run(["for-each-ref", "--format=%(objectname)", "refs/remotes"], worktree)
+  if (refs.exitCode !== 0) return withCloudFlags(commits, [])
+  const tips = refs.stdout.split(/\s+/).map((item) => item.trim()).filter(Boolean)
+  return withCloudFlags(commits, tips)
 }
 
 function uniqueRefs(refs: ReturnType<typeof parseRefLines>) {

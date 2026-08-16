@@ -237,6 +237,11 @@ describe("git action planner", () => {
     expect(plan).toEqual({ ok: false, reason: "A branch with that name already exists." })
   })
 
+  test("publishes with no local git steps", () => {
+    const plan = planGitAction({ snapshot: linear(), kind: "publish" })
+    expect(plan).toEqual({ ok: true, steps: [] })
+  })
+
   test("switches to another local thread", () => {
     const plan = planGitAction({ snapshot: branched(), kind: "switch", target: "feature" })
     expect(plan).toEqual({ ok: true, steps: [["switch", "feature"]] })

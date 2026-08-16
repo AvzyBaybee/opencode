@@ -18,6 +18,7 @@ export type GitActionRequest = {
   target?: string
   endID?: string
   force?: boolean
+  cloud?: boolean
   paths?: readonly string[]
 }
 
