@@ -10,6 +10,7 @@ import { CommitTooltip, type GitActionRequest, type GitGraphActions } from "../d
 import { en, statusMessage, type GitGraphCopy } from "../i18n/en"
 import { expandMergeRange, hasDiskBackups, localBranchNames } from "../source/actions"
 import { overwritePrompt, conflictPrompt } from "../source/git-error"
+import { rankBackups } from "../search/backup-search"
 
 const cloudIcon = new URL("../render/icons/cloud.svg", import.meta.url).href
 const driveIcon = new URL("../render/icons/hard-drive.svg", import.meta.url).href
@@ -41,6 +42,8 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   const [backupPlace, setBackupPlace] = createSignal<"cloud" | "disk">()
   const [savingBackup, setSavingBackup] = createSignal(false)
   const [pushingCloud, setPushingCloud] = createSignal(false)
+  const [searching, setSearching] = createSignal(false)
+  const [searchQuery, setSearchQuery] = createSignal("")
   const [backupName, setBackupName] = createSignal("")
   const [chromeBusy, setChromeBusy] = createSignal(false)
   const [chromeError, setChromeError] = createSignal("")
@@ -48,7 +51,8 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   const [overwriteName, setOverwriteName] = createSignal("")
   const [overwriteBusy, setOverwriteBusy] = createSignal(false)
   const [overwriteError, setOverwriteError] = createSignal("")
-  const [initName, setInitName] = createSignal("main")
+  const [initOpen, setInitOpen] = createSignal(false)
+  const [initName, setInitName] = createSignal("")
   const [initBusy, setInitBusy] = createSignal(false)
   const [initError, setInitError] = createSignal("")
   const [conflict, setConflict] = createSignal<{ files: string[] }>()
@@ -72,7 +76,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
   const layout = createMemo(() => {
     const current = snapshot()
-    if (!current) return
+    if (!current?.commits || !current.status) return
     return layoutGraph(current)
   })
 
@@ -116,7 +120,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     const ctx = node.getContext("2d")
     if (!ctx) return
     const scheme = props.colorScheme ?? "dark"
-    const colors = canvasColors(scheme)
+    const colors = canvasColors(scheme, host)
     const { width, height } = size()
     if (width < 2 || height < 2) return
     const dpr = window.devicePixelRatio || 1
@@ -167,18 +171,18 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
   onMount(() => {
     if (!host) return
-    const applySize = (width: number, height: number) => {
+    const applySize = () => {
+      const width = host.clientWidth
+      const height = host.clientHeight
       if (width < 2 || height < 2) return
       setSize((current) => (current.width === width && current.height === height ? current : { width, height }))
     }
-    applySize(host.clientWidth, host.clientHeight)
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (!entry) return
-      applySize(entry.contentRect.width, entry.contentRect.height)
-    })
+    applySize()
+    const frame = requestAnimationFrame(applySize)
+    const observer = new ResizeObserver(applySize)
     observer.observe(host)
     onCleanup(() => {
+      cancelAnimationFrame(frame)
       observer.disconnect()
       if (paintHandle) cancelAnimationFrame(paintHandle)
       interaction.cancelFly()
@@ -267,6 +271,12 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     return hasDiskBackups(current)
   })
 
+  const searchHits = createMemo(() => {
+    const current = snapshot()
+    if (!current || !searching()) return []
+    return rankBackups(current.commits, searchQuery())
+  })
+
   const cancelOverwrite = () => {
     setOverwrite(undefined)
     setOverwriteName("")
@@ -331,7 +341,24 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       return
     }
     setInitError("")
+    setInitOpen(false)
+    setInitName("")
     await props.source.refresh()
+  }
+
+  const canMakeRepo = () => snapshot()?.status.kind === "invalid" && !!snapshot()?.worktree && !!hostActions()?.init
+
+  const openInit = () => {
+    setInitName("")
+    setInitError("")
+    setInitOpen(true)
+  }
+
+  const closeInit = () => {
+    if (initBusy()) return
+    setInitOpen(false)
+    setInitError("")
+    setInitName("")
   }
 
   const runConflict = async (how: "abort" | "keep-this" | "keep-other" | "edited") => {
@@ -488,6 +515,20 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     closeRename()
   }
 
+  const closeSearch = () => {
+    setSearching(false)
+    setSearchQuery("")
+  }
+
+  const jumpToBackup = (id: string) => {
+    const currentLayout = layout()
+    if (!currentLayout) return
+    interaction.flyToCommit(currentLayout, id, size().width, size().height)
+    props.onSelect?.(id)
+    closeSearch()
+    closeRename()
+  }
+
   const onPointerDown = (event: PointerEvent) => {
     dragging = true
     moved = false
@@ -573,9 +614,9 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     <div class={`git-graph-root relative h-full min-h-0 w-full ${props.class ?? ""}`} data-component="git-graph-panel">
       <div
         ref={host}
-        class="absolute inset-0 overflow-hidden"
+        class="git-graph-canvas-host"
         style={{
-          background: "#141414",
+          background: "var(--git-graph-bg)",
           cursor:
             interaction.hoveringID() || interaction.hoveringEdgeKey() || interaction.hoveringLabel()
               ? "pointer"
@@ -666,9 +707,66 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               )}
             </Show>
           </div>
-          <button class="git-graph-button" type="button" disabled={!snapshot()?.head.commitID} onClick={goToHead}>
-            {copy().goToHead}
-          </button>
+          <div class="git-graph-float-end">
+            <button
+              class="git-graph-button git-graph-icon-button"
+              type="button"
+              disabled={!snapshot()?.commits.length}
+              title={copy().searchBackups}
+              onClick={() => {
+                if (searching()) {
+                  closeSearch()
+                  return
+                }
+                setSearching(true)
+                setSearchQuery("")
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
+                <path d="M16 16l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button class="git-graph-button" type="button" disabled={!snapshot()?.head.commitID} onClick={goToHead}>
+              {copy().goToHead}
+            </button>
+          </div>
+        </div>
+      </Show>
+
+      <Show when={searching()}>
+        <div
+          class="git-graph-search"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          <input
+            class="git-graph-button git-graph-name-input w-full"
+            value={searchQuery()}
+            placeholder={copy().searchPlaceholder}
+            autofocus
+            onInput={(event) => setSearchQuery(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                closeSearch()
+                return
+              }
+              if (event.key !== "Enter") return
+              const first = searchHits()[0]
+              if (first) jumpToBackup(first.id)
+            }}
+          />
+          <Show when={searchQuery().trim()}>
+            <div class="git-graph-search-list">
+              <For each={searchHits()}>
+                {(hit) => (
+                  <button class="git-graph-button git-graph-search-hit" type="button" onClick={() => jumpToBackup(hit.id)}>
+                    {hit.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
       </Show>
 
@@ -781,7 +879,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       <Show when={message()}>
         {(text) => (
           <div class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center p-6">
-            <div class="text-center text-[14px]" style={{ color: "#e8e8e8" }}>
+            <div class="text-center text-[14px]" style={{ color: "var(--git-graph-text)" }}>
               {text()}
             </div>
           </div>
@@ -881,11 +979,11 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
         >
-          <div class="git-graph-merge-dialog">
+          <div class="git-graph-merge-dialog" style={{ "text-align": "center" }}>
             <div class="text-[13px] font-medium">{copy().confirmMergeTitle}</div>
             <div class="mt-1.5">{copy().confirmMerge}</div>
             <input
-              class="git-graph-button mt-3 w-full text-left"
+              class="git-graph-button git-graph-name-input mt-3 w-full"
               value={mergeName()}
               placeholder={copy().mergeName}
               disabled={mergeBusy()}
@@ -902,7 +1000,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
                 </div>
               )}
             </Show>
-            <div class="mt-3 flex flex-wrap gap-1.5">
+            <div class="git-graph-tooltip-actions mt-3">
               <button class="git-graph-button" type="button" disabled={mergeBusy()} onClick={() => void runMerge()}>
                 {copy().mergeBackups}
               </button>
@@ -973,16 +1071,45 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
         )}
       </Show>
 
-      <Show when={snapshot()?.status.kind === "invalid" && snapshot()?.worktree && hostActions()?.init}>
-        <div
-          class="git-graph-merge-overlay"
+      <Show when={canMakeRepo() && !initOpen()}>
+        <button
+          type="button"
+          class="git-graph-empty"
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
+          onClick={openInit}
         >
-          <div class="git-graph-merge-dialog">
-            <div>{copy().noGit}</div>
+          <div class="git-graph-empty-icon">
+            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <circle cx="24" cy="12" r="5" stroke="currentColor" stroke-width="2" />
+              <circle cx="12" cy="36" r="5" stroke="currentColor" stroke-width="2" />
+              <circle cx="36" cy="36" r="5" stroke="currentColor" stroke-width="2" />
+              <path
+                d="M24 17v8M24 25L15 32M24 25l9 7"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <div class="git-graph-empty-label">{copy().noGit}</div>
+        </button>
+      </Show>
+
+      <Show when={canMakeRepo() && initOpen()}>
+        <div
+          class="git-graph-merge-overlay"
+          onPointerDown={(event) => {
+            event.stopPropagation()
+            if (event.target === event.currentTarget) closeInit()
+          }}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          <div class="git-graph-merge-dialog git-graph-init-dialog">
+            <div class="git-graph-init-title">{copy().createRepository}</div>
             <input
-              class="git-graph-button mt-3 w-full text-left"
+              class="git-graph-name-input git-graph-init-name"
               value={initName()}
               placeholder={copy().firstThreadName}
               disabled={initBusy()}
@@ -990,10 +1117,11 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               onInput={(event) => setInitName(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
-                  props.onLeaveRepo?.()
+                  closeInit()
                   return
                 }
                 if (event.key !== "Enter" || !initName().trim()) return
+                event.preventDefault()
                 void makeRepo()
               }}
             />
@@ -1004,7 +1132,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
                 </div>
               )}
             </Show>
-            <div class="mt-3 flex flex-wrap gap-1.5">
+            <div class="git-graph-init-actions">
               <button
                 class="git-graph-button"
                 type="button"
@@ -1013,7 +1141,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               >
                 {copy().makeGit}
               </button>
-              <button class="git-graph-button" type="button" disabled={initBusy()} onClick={() => props.onLeaveRepo?.()}>
+              <button class="git-graph-button" type="button" disabled={initBusy()} onClick={closeInit}>
                 {copy().cancel}
               </button>
             </div>

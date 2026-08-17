@@ -190,16 +190,24 @@
 }
 
 .ava-agent-form-heading-row {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+}
+
+.ava-agent-form-heading-add {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .ava-agent-form-heading,
 .ava-agent-field-label {
   font-size: 12px;
   font-weight: 500;
+  text-align: center;
   color: var(--v2-text-text-weak, var(--text-weak));
 }
 

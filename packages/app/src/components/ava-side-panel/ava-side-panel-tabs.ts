@@ -5,10 +5,11 @@ import { pathKey } from "@/utils/path-key"
 
 export const AVA_PROJECT_FOLDER_TAB = "ava-project-folder"
 export const AVA_CONTEXT_TAB = "ava-context"
+export const AVA_BACKUP_TAB = "ava-backup"
 export const AVA_AGENTS_TAB = "ava-agents"
 export const AVA_INSTRUCTIONS_TAB = "ava-instructions"
 
-const AVA_FIXED_TABS = [AVA_PROJECT_FOLDER_TAB, AVA_CONTEXT_TAB, AVA_AGENTS_TAB, AVA_INSTRUCTIONS_TAB] as const
+const AVA_FIXED_TABS = [AVA_PROJECT_FOLDER_TAB, AVA_CONTEXT_TAB, AVA_BACKUP_TAB, AVA_AGENTS_TAB, AVA_INSTRUCTIONS_TAB] as const
 
 export function browseFolderTab(directory: string) {
   return `ava-browse://${encodeURIComponent(directory)}`

@@ -214,7 +214,7 @@ export function CommitTooltip(props: {
             </>
           }
         >
-          <div class="mt-1.5" style={{ color: "var(--git-graph-text-weak)" }}>
+          <div class="mt-1.5" style={{ color: "var(--git-graph-text-weak)", "text-align": "center" }}>
             {props.copy.mergeHint}
           </div>
           <div class="git-graph-tooltip-actions mt-2">

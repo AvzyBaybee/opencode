@@ -61,17 +61,19 @@ export function AvaAgentSettingsForm(props: {
       <section class="ava-agent-form-section">
         <div class="ava-agent-form-heading-row">
           <div class="ava-agent-form-heading">{language.t("ava.agents.form.instructions")}</div>
-          <IconButtonV2
-            type="button"
-            size="small"
-            variant="ghost-muted"
-            aria-label={language.t("ava.agents.form.instructions.add")}
-            icon={<Icon name="plus" />}
-            onClick={() => {
-              setAddOpen((current) => !current)
-              setAddQuery("")
-            }}
-          />
+          <div class="ava-agent-form-heading-add">
+            <IconButtonV2
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              aria-label={language.t("ava.agents.form.instructions.add")}
+              icon={<Icon name="plus" />}
+              onClick={() => {
+                setAddOpen((current) => !current)
+                setAddQuery("")
+              }}
+            />
+          </div>
         </div>
         <div class="ava-agent-instruction-list">
           <For

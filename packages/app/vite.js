@@ -27,6 +27,7 @@ export default [
           alias: {
             "@": fileURLToPath(new URL("./src", import.meta.url)),
           },
+          dedupe: ["solid-js", "solid-js/web", "solid-js/store"],
         },
         define: {
           "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(uiChannel),

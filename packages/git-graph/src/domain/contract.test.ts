@@ -438,6 +438,35 @@ describe("layout", () => {
     }
   })
 
+  test("keeps stacked fork routes a gap apart instead of sharing a corner", () => {
+    const person = {
+      authorName: "Ava",
+      authorEmail: "ava@example.com",
+      committerName: "Ava",
+      committerEmail: "ava@example.com",
+    }
+    const layout = layoutGraph({
+      ...fixtureSnapshot("linear"),
+      commits: [
+        { id: "a2", parents: ["a1"], subject: "top", authorAt: 4000, committerAt: 4000, ...person },
+        { id: "b2", parents: ["a2"], subject: "high fork", authorAt: 3800, committerAt: 3800, ...person },
+        { id: "b1", parents: ["a1"], subject: "low fork", authorAt: 3000, committerAt: 3000, ...person },
+        { id: "a1", parents: ["a0"], subject: "mid", authorAt: 2000, committerAt: 2000, ...person },
+        { id: "a0", parents: [], subject: "root", authorAt: 1000, committerAt: 1000, ...person },
+      ],
+      refs: [
+        { name: "main", kind: "local", commitID: "a2" },
+        { name: "high", kind: "local", commitID: "b2" },
+        { name: "low", kind: "local", commitID: "b1" },
+      ],
+      head: { commitID: "a2", branch: "main", detached: false },
+    })
+    const forks = layout.edges.filter((edge) => edge.kind === "fork")
+    expect(forks.length).toBe(2)
+    expect(collinearOverlaps(layout)).toEqual([])
+    expect(cornerTouches(layout)).toEqual([])
+  })
+
   test("does not hold a corridor open for every historical fork", () => {
     const person = {
       authorName: "Ava",
@@ -628,6 +657,46 @@ function collinearOverlaps(layout: { edges: readonly { key: string; kind: string
       return [`${left.key} x ${right.key}`]
     }),
   )
+}
+
+function cornerTouches(layout: { edges: readonly { key: string; kind: string; points: readonly { x: number; y: number }[] }[] }) {
+  const segments = layout.edges
+    .filter((edge) => edge.kind !== "continue")
+    .flatMap((edge) =>
+      edge.points.slice(0, -1).map((start, index) => ({
+        key: edge.key,
+        start,
+        end: edge.points[index + 1]!,
+      })),
+    )
+  return segments.flatMap((left, index) =>
+    segments.slice(index + 1).flatMap((right) => {
+      if (left.key === right.key) return []
+      const leftH = Math.abs(left.end.x - left.start.x) >= Math.abs(left.end.y - left.start.y)
+      const rightH = Math.abs(right.end.x - right.start.x) >= Math.abs(right.end.y - right.start.y)
+      if (leftH === rightH) return []
+      const horizontal = leftH ? left : right
+      const vertical = leftH ? right : left
+      const x = vertical.start.x
+      const y = horizontal.start.y
+      if (pointToSegment(x, y, horizontal) >= 10) return []
+      if (pointToSegment(x, y, vertical) >= 10) return []
+      return [`${left.key} x ${right.key}`]
+    }),
+  )
+}
+
+function pointToSegment(
+  x: number,
+  y: number,
+  segment: { start: { x: number; y: number }; end: { x: number; y: number } },
+) {
+  const dx = segment.end.x - segment.start.x
+  const dy = segment.end.y - segment.start.y
+  const span = dx * dx + dy * dy
+  if (span < 1) return Math.hypot(x - segment.start.x, y - segment.start.y)
+  const t = Math.min(1, Math.max(0, ((x - segment.start.x) * dx + (y - segment.start.y) * dy) / span))
+  return Math.hypot(x - (segment.start.x + t * dx), y - (segment.start.y + t * dy))
 }
 
 describe("lane colors", () => {

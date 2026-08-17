@@ -1,4 +1,4 @@
-import { For, type JSX } from "solid-js"
+import { For, Show, Suspense, lazy, type JSX } from "solid-js"
 import { AvaManageAgentsPage } from "@/components/ava-manage-agents/ava-manage-agents-page"
 import { SessionContextTab } from "@/components/session"
 import type { ReviewPanelV2State } from "@/pages/session/v2/review-panel-v2-state"
@@ -7,12 +7,15 @@ import { AvaSidePanelNav } from "./ava-side-panel-nav"
 import { AvaSimplifySidePanel } from "./ava-simplify-side-panel"
 import {
   AVA_AGENTS_TAB,
+  AVA_BACKUP_TAB,
   AVA_CONTEXT_TAB,
   AVA_INSTRUCTIONS_TAB,
   AVA_PROJECT_FOLDER_TAB,
   browseFolderTab,
   type AvaSidePanelTabs,
 } from "./ava-side-panel-tabs"
+
+const AvaGitGraphPanel = lazy(() => import("./ava-git-graph-panel"))
 
 export function AvaSidePanelContent(props: {
   tab: string
@@ -33,6 +36,13 @@ export function AvaSidePanelContent(props: {
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_INSTRUCTIONS_TAB}>
           <AvaManageAgentsPage pane="instructions" sidebarWidth={props.state.sidebarWidth} />
+        </AvaSidePanelPane>
+        <AvaSidePanelPane active={props.tab === AVA_BACKUP_TAB}>
+          <Show when={props.tab === AVA_BACKUP_TAB}>
+            <Suspense>
+              <AvaGitGraphPanel />
+            </Suspense>
+          </Show>
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_PROJECT_FOLDER_TAB}>
           <AvaSimplifySidePanel

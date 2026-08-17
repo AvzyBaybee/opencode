@@ -589,19 +589,15 @@ function routeForkMerge(
   const startX = face.startX
   const endX = face.endX
   const gutters = verticalTracks(startX, endX, face.dir, plannedGutter)
-
-  const tryPath = (fromY: number, toY: number) => {
-    if (Math.abs(fromY - toY) < 8) {
-      const y = (fromY + toY) / 2
-      const straight = [
-        { x: startX, y },
-        { x: endX, y },
-      ]
-      if (!pathHits(straight, occupied)) return straight
-      return
-    }
-    return gutters
-      .map((gutter) =>
+  const fromYs = nudgeYs(startY, sideRange(parent))
+  const toYs = nudgeYs(endY, sideRange(child))
+  const candidates = fromYs.flatMap((fromY) =>
+    toYs.flatMap((toY) => {
+      if (Math.abs(fromY - toY) < 8) {
+        const y = (fromY + toY) / 2
+        return [[{ x: startX, y }, { x: endX, y }]]
+      }
+      return gutters.map((gutter) =>
         simplifyPath([
           { x: startX, y: fromY },
           { x: gutter, y: fromY },
@@ -609,23 +605,27 @@ function routeForkMerge(
           { x: endX, y: toY },
         ]),
       )
-      .find((path) => !pathHits(path, occupied))
-  }
+    }),
+  )
+  return pickRoute(candidates, occupied, startY, endY)
+}
 
-  const direct = tryPath(startY, endY)
-  if (direct) return direct
+function pickRoute(candidates: readonly GraphPoint[][], occupied: Occupied, startY: number, endY: number) {
+  const scored = candidates.map((path) => ({
+    path,
+    clear: !pathHits(path, occupied),
+    cost: Math.abs(path[0]!.y - startY) + Math.abs(path.at(-1)!.y - endY) + pathLength(path) / 1000,
+  }))
+  const clear = scored.filter((item) => item.clear)
+  const pool = clear.length > 0 ? clear : scored
+  return pool.reduce((best, item) => (item.cost < best.cost ? item : best)).path
+}
 
-  const nudged = nudgeYs(startY, sideRange(parent))
-    .flatMap((fromY) => nudgeYs(endY, sideRange(child)).map((toY) => tryPath(fromY, toY)))
-    .find(Boolean)
-  if (nudged) return nudged
-
-  return simplifyPath([
-    { x: startX, y: startY },
-    { x: gutters[0]!, y: startY },
-    { x: gutters[0]!, y: endY },
-    { x: endX, y: endY },
-  ])
+function pathLength(points: readonly GraphPoint[]) {
+  return points.slice(1).reduce((sum, point, index) => {
+    const prev = points[index]!
+    return sum + Math.hypot(point.x - prev.x, point.y - prev.y)
+  }, 0)
 }
 
 function verticalTracks(startX: number, endX: number, dir: number, planned?: number) {
@@ -638,8 +638,8 @@ function verticalTracks(startX: number, endX: number, dir: number, planned?: num
   const clamp = (value: number) => Math.min(hi, Math.max(lo, value))
   const nearStart = clamp(startX + dir * TRACK_INSET)
   const xs = [
-    nearStart,
     planned == null ? nearStart : clamp(planned),
+    nearStart,
     clamp(endX - dir * TRACK_INSET),
     ...Array.from({ length: 7 }, (_, track) => clamp(nearStart + dir * (track + 1) * TRACK_PITCH)),
   ]
@@ -653,13 +653,13 @@ function verticalTracks(startX: number, endX: number, dir: number, planned?: num
 }
 
 function sideRange(commit: LaidOutCommit) {
-  const pad = Math.min(12, commit.cardHeight / 4)
+  const pad = Math.min(6, commit.cardHeight / 6)
   return { lo: commit.cardTop + pad, hi: commit.cardTop + commit.cardHeight - pad }
 }
 
 function nudgeYs(y: number, range: { lo: number; hi: number }) {
   const seen = new Set<number>()
-  return [y, y - 16, y + 16, range.lo, range.hi, (range.lo + range.hi) / 2].flatMap((value) => {
+  return [y, y - 20, y + 20, y - 16, y + 16, range.lo, range.hi, (range.lo + range.hi) / 2].flatMap((value) => {
     const clamped = Math.min(range.hi, Math.max(range.lo, value))
     const key = Math.round(clamped)
     if (seen.has(key)) return []
@@ -677,10 +677,16 @@ function pathHits(points: readonly GraphPoint[], occupied: Occupied) {
     if (Math.hypot(dx, dy) < 8) continue
     if (dx !== 0 && dy !== 0) return true
     if (Math.abs(dx) >= Math.abs(dy)) {
-      if (hitsBucket(occupied.h, start.y, Math.min(start.x, end.x), Math.max(start.x, end.x))) return true
+      const from = Math.min(start.x, end.x)
+      const to = Math.max(start.x, end.x)
+      if (hitsBucket(occupied.h, start.y, from, to)) return true
+      if (hitsPerp(occupied.v, start.y, from, to)) return true
       continue
     }
-    if (hitsBucket(occupied.v, start.x, Math.min(start.y, end.y), Math.max(start.y, end.y))) return true
+    const from = Math.min(start.y, end.y)
+    const to = Math.max(start.y, end.y)
+    if (hitsBucket(occupied.v, start.x, from, to)) return true
+    if (hitsPerp(occupied.h, start.x, from, to)) return true
   }
 }
 
@@ -689,7 +695,19 @@ function hitsBucket(buckets: Map<number, StemRun[]>, at: number, from: number, t
   for (let delta = -CLEAR; delta <= CLEAR; delta++) {
     const runs = buckets.get(center + delta)
     if (!runs) continue
-    if (runs.some((run) => Math.abs(run.at - at) < CLEAR && from < run.to - 4 && to > run.from + 4)) return true
+    if (runs.some((run) => Math.abs(run.at - at) < CLEAR && from < run.to + CLEAR && to > run.from - CLEAR)) return true
+  }
+}
+
+function hitsPerp(buckets: Map<number, StemRun[]>, along: number, from: number, to: number) {
+  const lo = Math.round(from - CLEAR)
+  const hi = Math.round(to + CLEAR)
+  for (let key = lo; key <= hi; key++) {
+    const runs = buckets.get(key)
+    if (!runs) continue
+    if (runs.some((run) => run.at > from - CLEAR && run.at < to + CLEAR && along > run.from - CLEAR && along < run.to + CLEAR)) {
+      return true
+    }
   }
 }
 

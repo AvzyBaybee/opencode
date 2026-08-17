@@ -97,12 +97,11 @@ async function readRepository(options: LocalGitSourceOptions): Promise<GitGraphS
   }
 
   const repositoryRoot = root.stdout.trim().replace(/\\/g, "/")
-  const headSymbolic = await options.run(["symbolic-ref", "--quiet", "--short", "HEAD"], options.worktree)
-  const headCommit = await options.run(["rev-parse", "--verify", "HEAD"], options.worktree)
+  const head = await settleHead(options)
   const shallow = await options.run(["rev-parse", "--is-shallow-repository"], options.worktree)
-  const detached = headSymbolic.exitCode !== 0
-  const branch = headSymbolic.exitCode === 0 ? headSymbolic.stdout.trim() || undefined : undefined
-  const commitID = headCommit.exitCode === 0 ? headCommit.stdout.trim() || undefined : undefined
+  const detached = head.detached
+  const branch = head.branch
+  const commitID = head.commitID
 
   if (!commitID) {
     return normalizeSnapshot({
@@ -163,6 +162,24 @@ async function readRepository(options: LocalGitSourceOptions): Promise<GitGraphS
     refs: uniqueRefs(parsedRefs),
     shallow: shallow.stdout.trim() === "true",
   })
+}
+
+async function settleHead(options: LocalGitSourceOptions) {
+  let detached = true
+  let branch: string | undefined
+  let commitID: string | undefined
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const headSymbolic = await options.run(["symbolic-ref", "--quiet", "--short", "HEAD"], options.worktree)
+    const headCommit = await options.run(["rev-parse", "--verify", "HEAD"], options.worktree)
+    detached = headSymbolic.exitCode !== 0
+    branch = headSymbolic.exitCode === 0 ? headSymbolic.stdout.trim() || undefined : undefined
+    commitID = headCommit.exitCode === 0 ? headCommit.stdout.trim() || undefined : undefined
+    if (!branch || !commitID) return { detached, branch, commitID }
+    const tip = await options.run(["rev-parse", "--verify", branch], options.worktree)
+    if (tip.exitCode === 0 && tip.stdout.trim() === commitID) return { detached, branch, commitID }
+    await Bun.sleep(40)
+  }
+  return { detached, branch, commitID }
 }
 
 async function withRemoteCloudFlags(

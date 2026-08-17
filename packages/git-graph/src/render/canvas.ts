@@ -24,6 +24,7 @@ export type ThemeColors = {
   readonly focus: string
   readonly cardFill: string
   readonly cardBorder: string
+  readonly font: string
 }
 
 export const DEFAULT_THEME: ThemeColors = {
@@ -42,6 +43,7 @@ export const DEFAULT_THEME: ThemeColors = {
   focus: "#6b8cff",
   cardFill: "#2c2c2c",
   cardBorder: "#5a5a5a",
+  font: "Inter, ui-sans-serif, system-ui, sans-serif",
 }
 
 export function createCamera(partial?: Partial<Camera>): Camera {
@@ -293,12 +295,12 @@ function drawCommit(
   ctx.textBaseline = "middle"
 
   if (detachedHere) {
-    ctx.font = `${mutedSize}px Inter, ui-sans-serif, system-ui, sans-serif`
+    ctx.font = `${mutedSize}px ${colors.font}`
     ctx.fillStyle = colors.labelMuted
     ctx.fillText("you are here · no branch name", commit.x, commit.cardTop - 22)
   }
 
-  ctx.font = `${fontSize}px Inter, ui-sans-serif, system-ui, sans-serif`
+  ctx.font = `${fontSize}px ${colors.font}`
   ctx.fillStyle = colors.label
   ctx.fillText(commit.lines[0] ?? "", commit.x, commit.y)
   drawBackupPlaceMark(ctx, commit, colors.focus, colors.pillTag)
@@ -318,7 +320,7 @@ function drawLabels(
 ) {
   const pillH = 16
   for (const box of labelBoxes(commit)) {
-    roundRect(ctx, box.x, box.y, box.width, pillH, 8)
+    roundRect(ctx, box.x, box.y, box.width, pillH, 6)
     ctx.fillStyle = pillFill(box.label, colors, laneColor)
     ctx.fill()
     if (box.label.kind === "local" && (box.label.name === hovering || box.label.name === selected)) {
@@ -329,7 +331,7 @@ function drawLabels(
     ctx.fillStyle = pillText(box.label, colors)
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
-    ctx.font = `10px Inter, ui-sans-serif, system-ui, sans-serif`
+    ctx.font = `10px ${colors.font}`
     ctx.fillText(box.label.name, box.x + box.width / 2, box.y + pillH / 2)
   }
   ctx.textBaseline = "top"

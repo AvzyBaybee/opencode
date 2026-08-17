@@ -56,3 +56,5 @@ Once OpenCode hosts the panel:
 
 - Keep `src/standalone/**` for local iteration, or delete it if no longer needed
 - The embeddable surface is `src/host/git-graph-panel.tsx`
+- OpenCode mounts it as the **Backup** side-panel tab via `packages/app/src/components/ava-side-panel/`
+- The backend reuses `src/source/host-http.ts` at `/ava/git-graph/*`

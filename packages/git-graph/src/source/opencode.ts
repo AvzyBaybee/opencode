@@ -36,7 +36,14 @@ export function createOpenCodeGitSource(input: {
       listeners.add(listener)
       listener(current)
       const stop = input.subscribe?.((snapshot) => emit(snapshot))
-      void input.fetchSnapshot().then(emit)
+      void input.fetchSnapshot().then(emit, (error: Error) => {
+        emit(
+          emptySnapshot({
+            worktree: input.directory,
+            status: { kind: "error", message: error.message || "Could not read git history" },
+          }),
+        )
+      })
       return () => {
         listeners.delete(listener)
         stop?.()

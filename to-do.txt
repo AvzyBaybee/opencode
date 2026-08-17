@@ -7,3 +7,5 @@
 - Make popup to create backup centered.
 
 - Plug in Git Graph to OpenCode.
+
+- Write helper text for every button, starting with Squash.
