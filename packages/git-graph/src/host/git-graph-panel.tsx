@@ -64,6 +64,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   const [renameTo, setRenameTo] = createSignal("")
   const [renameBusy, setRenameBusy] = createSignal(false)
   const [renameError, setRenameError] = createSignal("")
+  const [showLoading, setShowLoading] = createSignal(false)
   let canvas: HTMLCanvasElement | undefined
   let host: HTMLDivElement | undefined
   let dragging = false
@@ -82,10 +83,20 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
   const message = createMemo(() => {
     const current = snapshot()
-    if (!current) return copy().loading
+    if (!current || current.status.kind === "loading") return showLoading() ? copy().loading : ""
     if (current.status.kind === "ready") return ""
     if (current.status.kind === "invalid" && current.worktree && props.actions?.init) return ""
     return statusMessage(copy(), current.status.kind, "message" in current.status ? current.status.message : undefined)
+  })
+
+  createEffect(() => {
+    const current = snapshot()
+    if (current && current.status.kind !== "loading") {
+      setShowLoading(false)
+      return
+    }
+    const timer = window.setTimeout(() => setShowLoading(true), 200)
+    onCleanup(() => window.clearTimeout(timer))
   })
 
   const selected = createMemo(() => {
@@ -1080,16 +1091,34 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
           onClick={openInit}
         >
           <div class="git-graph-empty-icon">
-            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-              <circle cx="24" cy="12" r="5" stroke="currentColor" stroke-width="2" />
-              <circle cx="12" cy="36" r="5" stroke="currentColor" stroke-width="2" />
-              <circle cx="36" cy="36" r="5" stroke="currentColor" stroke-width="2" />
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
-                d="M24 17v8M24 25L15 32M24 25l9 7"
+                d="M3 6C3 7.65685 4.34315 9 6 9C7.65685 9 9 7.65685 9 6C9 4.34315 7.65685 3 6 3C4.34315 3 3 4.34315 3 6Z"
                 stroke="currentColor"
-                stroke-width="2"
+                stroke-width="1.104"
+              />
+              <path
+                d="M3 18C3 19.6569 4.34315 21 6 21C7.65685 21 9 19.6569 9 18C9 16.3431 7.65685 15 6 15C4.34315 15 3 16.3431 3 18Z"
+                stroke="currentColor"
+                stroke-width="1.104"
+              />
+              <path
+                d="M15 6C15 7.65685 16.3431 9 18 9C19.6569 9 21 7.65685 21 6C21 4.34315 19.6569 3 18 3C16.3431 3 15 4.34315 15 6Z"
+                stroke="currentColor"
+                stroke-width="1.104"
+              />
+              <path
+                d="M6 15V9"
+                stroke="currentColor"
+                stroke-width="1.104"
                 stroke-linecap="round"
                 stroke-linejoin="round"
+              />
+              <path
+                d="M18 9V12.3242C18 16.9982 16.9424 18 12.008 18H9"
+                stroke="currentColor"
+                stroke-width="1.104"
+                stroke-linecap="round"
               />
             </svg>
           </div>

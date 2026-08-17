@@ -987,7 +987,7 @@ export const dict = {
   "ava.gitGraph.noGit": "This folder has no Git repository. Would you like to make one?",
   "ava.gitGraph.makeGit": "Create",
   "ava.gitGraph.createRepository": "Create a repository",
-  "ava.gitGraph.firstThreadName": "name your repository",
+  "ava.gitGraph.firstThreadName": "Name your repository",
   "ava.gitGraph.renameBranch": "Rename",
   "ava.gitGraph.pushAllToCloud": "Push all backups to cloud",
   "ava.gitGraph.pushingCloud": "Pushing backups to cloud…",

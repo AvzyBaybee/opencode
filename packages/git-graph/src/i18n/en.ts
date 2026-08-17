@@ -104,7 +104,7 @@ export const en: GitGraphCopy = {
   noGit: "This folder has no Git repository. Would you like to make one?",
   makeGit: "Create",
   createRepository: "Create a repository",
-  firstThreadName: "name your repository",
+  firstThreadName: "Name your repository",
   renameBranch: "Rename",
   pushAllToCloud: "Push all backups to cloud",
   pushingCloud: "Pushing backups to cloud…",

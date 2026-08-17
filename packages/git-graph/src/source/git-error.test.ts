@@ -38,6 +38,15 @@ Aborting`
     ).toBe("GitHub did not get this backup because a check in this folder blocked the send.")
   })
 
+  test("maps a missing git binary", () => {
+    expect(explainGitFailure("commit", "", "Could not start git. Install Git and make sure this app can find it.").message).toBe(
+      "Git isn't installed, or this app can't find it.",
+    )
+    expect(explainGitFailure("commit", "", "Could not start git. The folder does not exist: C:\\missing").message).toBe(
+      "That folder doesn't exist, so a repository can't be created there.",
+    )
+  })
+
   test("maps identity, lock, and disk-full failures", () => {
     expect(explainGitFailure("commit", "", "fatal: please tell me who you are").message).toBe(
       "You need a name & email address to create a backup.",

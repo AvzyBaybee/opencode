@@ -167,11 +167,11 @@ export async function handleGitGraphRequest(request: Request, options: GitGraphH
     const problem = branchNameProblem(name)
     if (problem) return json({ ok: false, message: problem }, 400)
     const dir = resolve(repo)
+    await mkdir(dir, { recursive: true })
     const existing = await bunGitRunner(["rev-parse", "--show-toplevel"], dir)
     if (existing.exitCode === 0) {
       return json({ ok: false, message: "This folder already has a Git repository." }, 400)
     }
-    await mkdir(dir, { recursive: true })
     const init = await bunGitRunner(["init"], dir)
     if (init.exitCode !== 0) {
       return json({ ok: false, message: explainGitFailure("commit", init.stdout, init.stderr).message }, 400)

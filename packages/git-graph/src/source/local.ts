@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process"
+import { existsSync } from "node:fs"
+import { delimiter, join } from "node:path"
 import type { GitGraphSnapshot, GitGraphSource } from "../domain/contract"
 import { emptySnapshot } from "../domain/contract"
 import { withCloudFlags } from "../domain/cloud"
@@ -177,7 +180,7 @@ async function settleHead(options: LocalGitSourceOptions) {
     if (!branch || !commitID) return { detached, branch, commitID }
     const tip = await options.run(["rev-parse", "--verify", branch], options.worktree)
     if (tip.exitCode === 0 && tip.stdout.trim() === commitID) return { detached, branch, commitID }
-    await Bun.sleep(40)
+    await new Promise((resolve) => setTimeout(resolve, 40))
   }
   return { detached, branch, commitID }
 }
@@ -205,27 +208,62 @@ function uniqueRefs(refs: ReturnType<typeof parseRefLines>) {
 }
 
 export async function bunGitRunner(args: readonly string[], cwd: string, env?: Record<string, string>) {
-  const argv = ["git", "--no-pager", "--no-optional-locks", "-c", "alias.log=", "-c", "log.maxCount=-1", ...args]
-  const proc = spawnGit(argv, cwd, env)
-  if (!proc) return { exitCode: 1, stdout: "", stderr: "Could not start git" }
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-  return { exitCode, stdout, stderr }
+  const git = gitCommand()
+  const proc = spawn(
+    git,
+    ["--no-pager", "--no-optional-locks", "-c", "alias.log=", "-c", "log.maxCount=-1", ...args],
+    {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: process.platform === "win32",
+      env: { ...process.env, PATH: gitSearchPath(), ...env },
+    },
+  )
+  const out: Buffer[] = []
+  const err: Buffer[] = []
+  proc.stdout?.on("data", (chunk) => out.push(chunk))
+  proc.stderr?.on("data", (chunk) => err.push(chunk))
+  const finished = await new Promise<{ exitCode: number; error?: unknown }>((resolve) => {
+    proc.once("error", (error) => resolve({ exitCode: 1, error }))
+    proc.once("close", (code) => resolve({ exitCode: code ?? 1 }))
+  })
+  const stdout = Buffer.concat(out).toString()
+  const stderr = Buffer.concat(err).toString()
+  if (finished.error) return { exitCode: 1, stdout, stderr: stderr || gitSpawnMessage(finished.error, cwd) }
+  return { exitCode: finished.exitCode, stdout, stderr }
 }
 
-function spawnGit(argv: string[], cwd: string, env?: Record<string, string>) {
-  try {
-    return Bun.spawn(argv, {
-      cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-      stdin: "ignore",
-      env: env ? { ...process.env, ...env } : undefined,
-    })
-  } catch {
-    return
+function gitCommand() {
+  const names = process.platform === "win32" ? ["git.exe", "git.cmd", "git"] : ["git"]
+  for (const dir of gitSearchPath().split(delimiter)) {
+    if (!dir) continue
+    for (const name of names) {
+      const file = join(dir, name)
+      if (existsSync(file)) return file
+    }
   }
+  return names[0] ?? "git"
+}
+
+function gitSearchPath() {
+  const current = process.env.PATH ?? process.env.Path ?? ""
+  if (process.platform !== "win32") return current
+  const extra = [
+    "C:\\Program Files\\Git\\cmd",
+    "C:\\Program Files\\Git\\bin",
+    "C:\\Program Files (x86)\\Git\\cmd",
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "Programs", "Git", "cmd") : "",
+  ].filter(Boolean)
+  return [...extra, current].join(delimiter)
+}
+
+function gitSpawnMessage(error: unknown, cwd: string) {
+  const text = error instanceof Error ? error.message : String(error)
+  if (/executable not found/i.test(text)) {
+    return "Could not start git. Install Git and make sure this app can find it."
+  }
+  if (/enoent/i.test(text)) {
+    return `Could not start git. The folder does not exist: ${cwd}`
+  }
+  return `Could not start git. ${text}`
 }

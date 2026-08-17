@@ -5,6 +5,12 @@ export function explainGitFailure(kind: GitActionKind, stdout: string, stderr: s
   if (kind === "commit" && /nothing to commit/i.test(text)) {
     return { message: "No files have changed since the last backup, so there's nothing to backup." }
   }
+  if (/could not start git/i.test(text)) {
+    if (/folder does not exist/i.test(text)) {
+      return { message: "That folder doesn't exist, so a repository can't be created there." }
+    }
+    return { message: "Git isn't installed, or this app can't find it." }
+  }
   if (/please tell me who you are/i.test(text)) {
     return { message: "You need a name & email address to create a backup." }
   }

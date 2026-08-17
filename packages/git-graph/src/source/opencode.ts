@@ -1,20 +1,25 @@
 import type { GitGraphSnapshot, GitGraphSource } from "../domain/contract"
 import { emptySnapshot } from "../domain/contract"
 
+const snapshotCache = new Map<string, GitGraphSnapshot>()
+
 /** Integration seam for OpenCode. Standalone development uses LocalGitSource. */
 export function createOpenCodeGitSource(input: {
   directory: string
   fetchSnapshot: () => Promise<GitGraphSnapshot>
   subscribe?: (listener: (snapshot: GitGraphSnapshot) => void) => () => void
 }): GitGraphSource {
-  let current = emptySnapshot({
-    worktree: input.directory,
-    status: { kind: "loading" },
-  })
+  let current =
+    snapshotCache.get(input.directory) ??
+    emptySnapshot({
+      worktree: input.directory,
+      status: { kind: "loading" },
+    })
   const listeners = new Set<(snapshot: GitGraphSnapshot) => void>()
 
   const emit = (snapshot: GitGraphSnapshot) => {
     current = snapshot
+    if (snapshot.status.kind !== "loading") snapshotCache.set(input.directory, snapshot)
     for (const listener of listeners) listener(snapshot)
   }
 
