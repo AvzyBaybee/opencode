@@ -57,6 +57,7 @@ import { ServerConnection, ServerProvider, serverName, useServer } from "@/conte
 import { SettingsProvider, useSettings } from "@/context/settings"
 import { TabsProvider, useTabs, type DraftTab } from "@/context/tabs"
 import { SDKProvider, useSDK } from "@/context/sdk"
+import { TerminalProvider } from "@/context/terminal"
 import { WslServersProvider } from "@/wsl/context"
 import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout"
 import LegacyLayout from "@/pages/layout"
@@ -380,15 +381,16 @@ function NewAppLayout(props: ParentProps<{ serverScoped?: JSX.Element }>) {
   )
 }
 
-// The draft page only renders the prompt composer, so it drops TerminalProvider.
 // FileProvider and CommentsProvider stay because PromptInput uses file search and comment context.
 function DraftProviders(props: ParentProps) {
   return (
-    <FileProvider>
-      <PromptProvider>
-        <CommentsProvider>{props.children}</CommentsProvider>
-      </PromptProvider>
-    </FileProvider>
+    <TerminalProvider>
+      <FileProvider>
+        <PromptProvider>
+          <CommentsProvider>{props.children}</CommentsProvider>
+        </PromptProvider>
+      </FileProvider>
+    </TerminalProvider>
   )
 }
 

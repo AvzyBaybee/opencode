@@ -1,11 +1,14 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
+import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { WordmarkV2 } from "@opencode-ai/ui/v2/wordmark-v2"
 import { Show, createMemo, createSignal, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
+import { createMediaQuery } from "@solid-primitives/media"
 import createPresence from "solid-presence"
 import { PromptInputV2Composer } from "@/components/prompt-input-v2"
 import { PromptGitStatus, PromptWorkspaceSelector } from "@/components/prompt-workspace-selector"
@@ -14,12 +17,17 @@ import {
   PromptProjectSelector,
   type PromptProjectController,
 } from "@/components/prompt-project-selector"
+import { reviewTooltipKeybind } from "@/components/command-tooltip-keybind"
 import { StatusPopoverV2 } from "@/components/status-popover"
+import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
+import { useTerminal } from "@/context/terminal"
 import { useProviders } from "@/hooks/use-providers"
+import { focusTerminalById } from "@/pages/session/helpers"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
+import { useSessionLayout } from "@/pages/session/session-layout"
 import { Persist, persisted } from "@/utils/persist"
 import type { NewSessionDraftController } from "./new-session-draft-controller"
 import type { NewSessionWorkspaceController } from "./new-session-workspace-controller"
@@ -76,16 +84,86 @@ export function NewSessionView(props: {
 
 export function NewSessionStatus(props: { mount: Accessor<HTMLElement | null>; visible: Accessor<boolean> }) {
   const language = useLanguage()
+  const command = useCommand()
+  const terminal = useTerminal()
+  const { view } = useSessionLayout()
+  const isDesktop = createMediaQuery("(min-width: 768px)")
+  const terminalOpened = createMemo(() => view().terminal.opened())
+  const reviewOpened = createMemo(() => view().reviewPanel.opened())
+  const terminalKeybind = createMemo(() => command.keybindParts("terminal.toggle"))
+  const reviewKeybind = createMemo(() => reviewTooltipKeybind(command))
+  const toggleTerminal = () => {
+    const next = !terminalOpened()
+    view().terminal.toggle()
+    if (!next) return
+    const id = terminal.active()
+    if (!id) return
+    focusTerminalById(id)
+  }
 
   return (
     <Show when={props.mount()} keyed>
       {(mount) => (
         <Portal mount={mount}>
-          <Show when={props.visible()}>
-            <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
-              <StatusPopoverV2 />
-            </Tooltip>
-          </Show>
+          <div class="flex items-center gap-2">
+            <Show when={props.visible()}>
+              <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
+                <StatusPopoverV2 />
+              </Tooltip>
+            </Show>
+            <Show when={isDesktop()}>
+              <TooltipV2
+                class="shrink-0"
+                placement="bottom"
+                value={
+                  <>
+                    {language.t("command.terminal.toggle")}
+                    <Show when={terminalKeybind().length > 0}>
+                      <KeybindV2 keys={terminalKeybind()} variant="neutral" />
+                    </Show>
+                  </>
+                }
+              >
+                <IconButtonV2
+                  type="button"
+                  variant="ghost-muted"
+                  size="large"
+                  class="!w-9 shrink-0"
+                  state={terminalOpened() ? "pressed" : undefined}
+                  onClick={toggleTerminal}
+                  aria-label={language.t("command.terminal.toggle")}
+                  aria-expanded={terminalOpened()}
+                  aria-controls="terminal-panel"
+                  icon={<IconV2 name="console" class="scale-110" />}
+                />
+              </TooltipV2>
+              <TooltipV2
+                class="shrink-0"
+                placement="bottom"
+                value={
+                  <>
+                    {language.t("command.review.toggle")}
+                    <Show when={reviewKeybind().length > 0}>
+                      <KeybindV2 keys={reviewKeybind()} variant="neutral" />
+                    </Show>
+                  </>
+                }
+              >
+                <IconButtonV2
+                  type="button"
+                  variant="ghost-muted"
+                  size="large"
+                  class="!w-9 shrink-0"
+                  state={reviewOpened() ? "pressed" : undefined}
+                  onClick={() => view().reviewPanel.toggle()}
+                  aria-label={language.t("command.review.toggle")}
+                  aria-expanded={reviewOpened()}
+                  aria-controls="review-panel"
+                  icon={<IconV2 name="sidebar-right" />}
+                />
+              </TooltipV2>
+            </Show>
+          </div>
         </Portal>
       )}
     </Show>

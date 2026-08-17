@@ -107,7 +107,7 @@ export function SessionSidePanel(props: {
   const server = useServer()
   const pickDirectory = useDirectoryPicker()
   const simplify = useAvaSimplifySidePanelSetting()
-  const { sessionKey, tabs, view, params } = useSessionLayout()
+  const { sessionKey, tabs, view } = useSessionLayout()
   const projectDirectory = createMemo(() => sdk().directory)
   const avaTabs = createAvaSidePanelTabs(projectDirectory)
   const simplifyEnabled = createMemo(() => simplify.enabled())
@@ -342,7 +342,7 @@ export function SessionSidePanel(props: {
   })
 
   return (
-    <Show when={isDesktop() && !(settings.general.newLayoutDesigns() && !params.id)}>
+    <Show when={isDesktop()}>
       <aside
         id="review-panel"
         aria-label={language.t("session.panel.reviewAndFiles")}

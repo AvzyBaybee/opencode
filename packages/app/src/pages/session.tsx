@@ -454,7 +454,7 @@ export default function Page() {
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const size = createSizing()
   const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
-  const desktopV2ReviewOpen = createMemo(() => newSessionDesign() && desktopReviewOpen() && !!params.id)
+  const desktopV2ReviewOpen = createMemo(() => newSessionDesign() && desktopReviewOpen())
   const terminalOpen = createMemo(() => view().terminal.opened())
   const desktopTerminalOpen = createMemo(() => isDesktop() && terminalOpen())
   const desktopInlineTerminalOnlyOpen = createMemo(
@@ -1159,7 +1159,7 @@ export default function Page() {
     setActiveMessage,
     focusInput,
     review: reviewTab,
-    fileBrowser: () => newSessionDesign() && isDesktop() && !!params.id,
+    fileBrowser: () => newSessionDesign() && isDesktop(),
   })
   command.register("session-palette", () => [
     {
