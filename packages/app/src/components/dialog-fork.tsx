@@ -11,6 +11,7 @@ import { extractPromptFromParts } from "@/utils/prompt"
 import type { TextPart as SDKTextPart } from "@opencode-ai/sdk/v2/client"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useLanguage } from "@/context/language"
+import { useLocal } from "@/context/local"
 
 interface ForkableMessage {
   id: string
@@ -30,6 +31,7 @@ export const DialogFork: Component = () => {
   const prompt = usePrompt()
   const dialog = useDialog()
   const language = useLanguage()
+  const local = useLocal()
 
   const messages = createMemo((): ForkableMessage[] => {
     const sessionID = params.id
@@ -71,6 +73,7 @@ export const DialogFork: Component = () => {
     sdk()
       .api.session.fork({ sessionID, messageID: item.id })
       .then((forked) => {
+        local.session.promote(sdk().directory, forked.id)
         dialog.close()
         prompt.set(restored, undefined, { dir, id: forked.id })
         navigate(`/${dir}/session/${forked.id}`)

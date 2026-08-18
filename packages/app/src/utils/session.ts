@@ -19,6 +19,7 @@ export function normalizeSessionInfo(input: SessionInfo | Session): Session {
     model: input.model,
     version: "",
     time: input.time,
+    metadata: "metadata" in input ? (input.metadata as Session["metadata"]) : undefined,
     revert: input.revert && {
       messageID: input.revert.messageID,
       partID: input.revert.partID,

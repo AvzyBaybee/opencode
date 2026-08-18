@@ -337,15 +337,16 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     const modelSelection = input.model ?? local.model
     const currentModel = modelSelection.current()
-    const currentAgent = local.agent.current()
+    const currentAgent = local.agent.current() ?? local.agent.list()[0]
     const variant = modelSelection.variant.current()
-    if (!currentModel || !currentAgent) {
+    if (!currentModel) {
       showToast({
         title: language.t("prompt.toast.modelAgentRequired.title"),
         description: language.t("prompt.toast.modelAgentRequired.description"),
       })
       return
     }
+    const agentName = currentAgent?.name ?? "build"
 
     input.addToHistory(currentPrompt, mode)
     input.resetHistoryNavigation()
@@ -402,7 +403,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     if (!session && isNewSession) {
       const created = await sdk()
         .api.session.create({
-          agent: currentAgent.name,
+          agent: agentName,
           model: { id: currentModel.id, providerID: currentModel.provider.id, variant },
           location: { directory: sessionDirectory },
         })
@@ -421,7 +422,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
           if (!session) return
           if (shouldAutoAccept) permissionState.enableAutoAccept(session.id, sessionDirectory)
           local.session.promote(sessionDirectory, session.id, {
-            agent: currentAgent.name,
+            agent: agentName,
             model: { providerID: currentModel.provider.id, modelID: currentModel.id },
             variant: variant ?? null,
           })
@@ -445,7 +446,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       modelID: currentModel.id,
       providerID: currentModel.provider.id,
     }
-    const agent = currentAgent.name
+    const agent = agentName
     const draft: FollowupDraft = {
       sessionID: session.id,
       sessionDirectory,

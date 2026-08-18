@@ -19,6 +19,10 @@ export namespace TimelineRow {
     userMessageID: string
     label: "compaction" | "interrupted"
   }> {}
+  export class BranchFrom extends Data.TaggedClass("BranchFrom")<{
+    originSessionID: string
+    title: string
+  }> {}
   export class AssistantPart extends Data.TaggedClass("AssistantPart")<{
     userMessageID: string
     group: PartGroup
@@ -45,6 +49,7 @@ export namespace TimelineRow {
     | CommentStrip
     | UserMessage
     | TurnDivider
+    | BranchFrom
     | AssistantPart
     | Thinking
     | DiffSummary
@@ -61,6 +66,8 @@ export namespace TimelineRow {
         return `user-message:${row.userMessageID}`
       case "TurnDivider":
         return `turn-divider:${row.userMessageID}:${row.label}`
+      case "BranchFrom":
+        return `branch-from:${row.originSessionID}`
       case "AssistantPart":
         return `assistant-part:${row.userMessageID}:${row.group.key}`
       case "Thinking":

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionNotFoundError } from "@opencode-ai/sdk/v2/client"
 import type { ConfigInvalidError, ProviderModelNotFoundError } from "./server-errors"
-import { formatServerError, isSessionNotFoundError, parseReadableConfigInvalidError } from "./server-errors"
+import { formatServerError, formatSessionEventError, isSessionNotFoundError, parseReadableConfigInvalidError } from "./server-errors"
 
 function fill(text: string, vars?: Record<string, string | number>) {
   if (!vars) return text
@@ -142,6 +142,22 @@ describe("formatServerError", () => {
 
     expect(formatServerError(wrapped, language.t)).toBe("Arquivo de config em config invalido: Missing host")
   })
+
+  test("includes the unknown-error log ref", () => {
+    const wrapped = new Error("Unexpected server error. Check server logs for details.", {
+      cause: {
+        body: {
+          name: "UnknownError",
+          data: { message: "Unexpected server error. Check server logs for details.", ref: "err_abc123" },
+        },
+        status: 500,
+      },
+    })
+
+    expect(formatServerError(wrapped, language.t)).toBe(
+      "Unexpected server error. Check server logs for details. (err_abc123)",
+    )
+  })
 })
 
 describe("isSessionNotFoundError", () => {
@@ -171,5 +187,22 @@ describe("isSessionNotFoundError", () => {
         "ses_tab",
       ),
     ).toBe(false)
+  })
+})
+
+describe("formatSessionEventError", () => {
+  test("reads provider auth and unknown error messages", () => {
+    expect(
+      formatSessionEventError(
+        { name: "ProviderAuthError", data: { providerID: "openai", message: "Invalid API key" } },
+        "fallback",
+      ),
+    ).toBe("Invalid API key")
+    expect(
+      formatSessionEventError(
+        { name: "UnknownError", data: { message: "Unexpected server error.", ref: "err_1" } },
+        "fallback",
+      ),
+    ).toBe("Unexpected server error. (err_1)")
   })
 })

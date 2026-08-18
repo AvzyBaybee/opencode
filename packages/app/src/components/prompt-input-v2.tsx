@@ -542,55 +542,53 @@ function PromptInputV2ModelControl(props: {
     </>
   )
   return (
-    <Show when={!props.loading}>
-      <TooltipV2
-        placement="top"
-        gutter={4}
-        value={
-          <>
-            {props.title}
-            <KeybindV2 keys={props.keybind} variant="neutral" />
-          </>
+    <TooltipV2
+      placement="top"
+      gutter={4}
+      value={
+        <>
+          {props.title}
+          <KeybindV2 keys={props.keybind} variant="neutral" />
+        </>
+      }
+    >
+      <Show
+        when={props.paid}
+        fallback={
+          <ButtonV2
+            data-action="prompt-model"
+            data-control-type="dialog"
+            variant="ghost-muted"
+            size="normal"
+            class="min-w-0 max-w-[220px] justify-start ![font-weight:440] group"
+            classList={{ "animate-in fade-in": shouldAnimate() }}
+            style={{ height: "28px" }}
+            onClick={props.onUnpaidClick}
+          >
+            {content()}
+          </ButtonV2>
         }
       >
-        <Show
-          when={props.paid}
-          fallback={
+        <ModelSelectorPopoverV2
+          model={props.model}
+          trigger={(triggerProps) => (
             <ButtonV2
-              data-action="prompt-model"
-              data-control-type="dialog"
+              {...triggerProps}
               variant="ghost-muted"
               size="normal"
+              style={{ height: "28px" }}
               class="min-w-0 max-w-[220px] justify-start ![font-weight:440] group"
               classList={{ "animate-in fade-in": shouldAnimate() }}
-              style={{ height: "28px" }}
-              onClick={props.onUnpaidClick}
+              data-action="prompt-model"
+              data-control-type="popover"
             >
               {content()}
             </ButtonV2>
-          }
-        >
-          <ModelSelectorPopoverV2
-            model={props.model}
-            trigger={(triggerProps) => (
-              <ButtonV2
-                {...triggerProps}
-                variant="ghost-muted"
-                size="normal"
-                style={{ height: "28px" }}
-                class="min-w-0 max-w-[220px] justify-start ![font-weight:440] group"
-                classList={{ "animate-in fade-in": shouldAnimate() }}
-                data-action="prompt-model"
-                data-control-type="popover"
-              >
-                {content()}
-              </ButtonV2>
-            )}
-            onClose={props.onClose}
-          />
-        </Show>
-      </TooltipV2>
-    </Show>
+          )}
+          onClose={props.onClose}
+        />
+      </Show>
+    </TooltipV2>
   )
 }
 

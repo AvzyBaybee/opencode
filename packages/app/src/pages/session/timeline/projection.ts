@@ -1,6 +1,7 @@
 import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 import type { AssistantMessage, Message, Part, SessionStatus, UserMessage } from "@opencode-ai/sdk/v2"
 import { createMemo, type Accessor } from "solid-js"
+import { branchRowInsertIndex, type SessionBranchOrigin } from "@/utils/session-branch"
 import { reuseTimelineRows } from "./row-reconciliation"
 import { Timeline, TimelineRow } from "./rows"
 
@@ -14,6 +15,7 @@ export function createTimelineProjection(input: {
   status: Accessor<SessionStatus>
   showReasoningSummaries: Accessor<boolean>
   inlineComments: Accessor<boolean>
+  branchOrigin?: Accessor<SessionBranchOrigin | undefined>
 }) {
   const messageByID = createMemo(() => new Map(input.messages().map((message) => [message.id, message] as const)))
   const assistantMessagesByParent = createMemo(() => {
@@ -42,7 +44,7 @@ export function createTimelineProjection(input: {
   )
   const activeMessageID = createMemo(() => projection().activeMessageID)
   const rows = createMemo((previous: TimelineRow.TimelineRow[] | undefined) =>
-    reuseTimelineRows(previous, projection().rows),
+    reuseTimelineRows(previous, withBranchFrom(projection().rows, input.branchOrigin?.())),
   )
   const rowByKey = createMemo(() => new Map(rows().map((row) => [TimelineRow.key(row), row] as const)))
   const messageRowIndex = createMemo(() => {
@@ -78,4 +80,12 @@ export function createTimelineProjection(input: {
     rowByKey,
     rows,
   }
+}
+
+function withBranchFrom(rows: TimelineRow.TimelineRow[], origin?: SessionBranchOrigin) {
+  if (!origin) return rows
+  const index = branchRowInsertIndex(rows, origin.afterUserMessageID)
+  if (index === undefined) return rows
+  const marker = new TimelineRow.BranchFrom({ originSessionID: origin.sessionID, title: origin.title })
+  return [...rows.slice(0, index), marker, ...rows.slice(index)]
 }

@@ -102,6 +102,7 @@ import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
+import { forkExclusiveAfter } from "@/utils/session-branch"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
@@ -2090,6 +2091,26 @@ export default function Page() {
     ))
   }
 
+  const forkMessage = (input: { sessionID: string; messageID: string }) => {
+    const messageID = forkExclusiveAfter(sync().data.message[input.sessionID] ?? [], input.messageID)
+    sdk()
+      .api.session.fork({ sessionID: input.sessionID, ...(messageID && { messageID }) })
+      .then((forked) => {
+        local.session.promote(sdk().directory, forked.id)
+        navigate(
+          params.serverKey
+            ? sessionHref(requireServerKey(params.serverKey), forked.id)
+            : legacySessionHref(sdk().directory, forked.id),
+        )
+      })
+      .catch((err: unknown) => {
+        showToast({
+          title: language.t("common.requestFailed"),
+          description: err instanceof Error ? err.message : undefined,
+        })
+      })
+  }
+
   const rolled = createMemo(() => {
     const id = revertMessageID()
     if (!id) return []
@@ -2126,6 +2147,7 @@ export default function Page() {
   const actions = {
     delete: deleteMessage,
     edit: editMessage,
+    fork: forkMessage,
     openAttachment,
     revealPath: platform.revealPath
       ? (path: string) => {

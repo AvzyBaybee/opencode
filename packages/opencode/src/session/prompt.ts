@@ -107,6 +107,7 @@ export interface Interface {
   readonly shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.BusyError>
   readonly command: (input: CommandInput) => Effect.Effect<SessionV1.WithParts, Image.Error>
   readonly resolvePromptParts: (template: string) => Effect.Effect<PromptInput["parts"]>
+  readonly nameForked: (sessionID: SessionID) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionPrompt") {}
@@ -191,21 +192,19 @@ const layer = Layer.effect(
       return parts
     })
 
-    const title = Effect.fn("SessionPrompt.ensureTitle")(function* (input: {
+    const realUser = (m: SessionV1.WithParts) =>
+      m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic)
+
+    const generateSessionTitle = Effect.fn("SessionPrompt.generateSessionTitle")(function* (input: {
       session: Session.Info
       history: SessionV1.WithParts[]
       providerID: ProviderV2.ID
       modelID: ModelV2.ID
+      prefix?: string
+      replaceIf?: (title: string) => boolean
     }) {
-      if (input.session.parentID) return
-      if (!Session.isDefaultTitle(input.session.title)) return
-
-      const real = (m: SessionV1.WithParts) =>
-        m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic)
-      const idx = input.history.findIndex(real)
+      const idx = input.history.findIndex(realUser)
       if (idx === -1) return
-      if (input.history.filter(real).length !== 1) return
-
       const context = input.history.slice(0, idx + 1)
       const firstUser = context[idx]
       if (!firstUser || firstUser.info.role !== "user") return
@@ -247,10 +246,62 @@ const layer = Layer.effect(
         .map((line) => line.trim())
         .find((line) => line.length > 0)
       if (!cleaned) return
-      const t = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
+      const labeled = input.prefix ? `${input.prefix} ${cleaned}` : cleaned
+      const t = labeled.length > 100 ? labeled.substring(0, 97) + "..." : labeled
+      const latest = yield* sessions.get(input.session.id)
+      if (!(input.replaceIf ?? Session.isDefaultTitle)(latest.title)) return
       yield* sessions
         .setTitle({ sessionID: input.session.id, title: t })
         .pipe(Effect.catchCause((cause) => Effect.logError("failed to generate title", { error: Cause.squash(cause) })))
+    })
+
+    const title = Effect.fn("SessionPrompt.ensureTitle")(function* (input: {
+      session: Session.Info
+      history: SessionV1.WithParts[]
+      providerID: ProviderV2.ID
+      modelID: ModelV2.ID
+    }) {
+      if (input.session.parentID) return
+      if (!Session.isDefaultTitle(input.session.title)) return
+      if (input.history.filter(realUser).length !== 1) return
+      yield* generateSessionTitle(input)
+    })
+
+    const nameForked = Effect.fn("SessionPrompt.nameForked")(function* (sessionID: SessionID) {
+      const session = yield* sessions.get(sessionID)
+      if (session.parentID) return
+
+      const origin = session.metadata?.branchedFrom
+      const originTitle =
+        origin && typeof origin === "object" && "title" in origin && typeof origin.title === "string"
+          ? origin.title
+          : undefined
+      const fallback = Session.branchTitle(originTitle ?? session.title.replace(/^\[Branch\] /, ""))
+      if (!Session.isDefaultTitle(session.title) && session.title !== fallback) return
+
+      const originID =
+        origin && typeof origin === "object" && "sessionID" in origin && typeof origin.sessionID === "string"
+          ? SessionID.make(origin.sessionID)
+          : sessionID
+      const own = yield* sessions.messages({ sessionID })
+      const history = own.some(realUser)
+        ? own
+        : yield* sessions.messages({ sessionID: originID }).pipe(Effect.catch(() => Effect.succeed(own)))
+      const idx = history.findIndex(realUser)
+      const first = idx === -1 ? undefined : history[idx]
+      if (!first || first.info.role !== "user") {
+        if (session.title === fallback) return
+        yield* sessions.setTitle({ sessionID, title: fallback })
+        return
+      }
+      yield* generateSessionTitle({
+        session,
+        history,
+        providerID: first.info.model.providerID,
+        modelID: first.info.model.modelID,
+        prefix: "[Branch]",
+        replaceIf: (title) => Session.isDefaultTitle(title) || title === fallback,
+      })
     })
 
     const handleSubtask = Effect.fn("SessionPrompt.handleSubtask")(function* (input: {
@@ -1492,6 +1543,7 @@ const layer = Layer.effect(
       shell,
       command,
       resolvePromptParts,
+      nameForked: (sessionID) => nameForked(sessionID).pipe(Effect.catch(() => Effect.void)),
     })
   }),
 )

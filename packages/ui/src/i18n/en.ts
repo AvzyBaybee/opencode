@@ -198,7 +198,7 @@ export const dict: Record<string, string> = {
   "ui.message.raw": "Raw",
   "ui.message.markdown": "Markdown",
   "ui.message.copyMessage": "Copy message",
-  "ui.message.forkMessage": "Fork to new session",
+  "ui.message.forkMessage": "Branch to new chat",
   "ui.message.revertMessage": "Revert message",
   "ui.message.editMessage": "Edit message",
   "ui.message.editMessageConfirm": "Save changes to this message?",

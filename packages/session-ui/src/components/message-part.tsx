@@ -220,7 +220,7 @@ export interface MessagePartProps {
 
 function MessageActionButton(
   props: Pick<ComponentProps<"button">, "disabled" | "onMouseDown" | "onClick" | "aria-label"> & {
-    icon: "check" | "copy" | "edit" | "reset" | "trash"
+    icon: "check" | "copy" | "edit" | "reset" | "trash" | "branch"
     label: JSX.Element
     useV2?: boolean
   },
@@ -1643,6 +1643,20 @@ export function UserMessageDisplay(props: {
                     aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
                   />
                 </Show>
+                <Show when={props.actions?.fork}>
+                  <MessageActionButton
+                    icon="branch"
+                    label={i18n.t("ui.message.forkMessage")}
+                    useV2={props.useV2Actions}
+                    disabled={!!busy()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void props.actions?.fork?.({ sessionID: props.message.sessionID, messageID: props.message.id })
+                    }}
+                    aria-label={i18n.t("ui.message.forkMessage")}
+                  />
+                </Show>
                 <Show when={props.actions?.edit && text()}>
                   <MessageActionButton
                     icon="edit"
@@ -1929,13 +1943,13 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   )
 }
 
-export function MessageDivider(props: { label: string }) {
+export function MessageDivider(props: { label?: string; children?: JSX.Element }) {
   return (
     <div data-component="compaction-part">
       <div data-slot="compaction-part-divider">
         <span data-slot="compaction-part-line" />
         <span data-slot="compaction-part-label" class="text-12-regular text-text-weak">
-          {props.label}
+          {props.children ?? props.label}
         </span>
         <span data-slot="compaction-part-line" />
       </div>
@@ -2130,12 +2144,28 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
                 <>
                   <MessageActionButton
                     icon={copied() ? "check" : "copy"}
-                    label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
+                    label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
                     useV2={props.useV2Actions}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={handleCopy}
-                    aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
+                    aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
                   />
+                  <Show when={props.actions?.fork}>
+                    <MessageActionButton
+                      icon="branch"
+                      label={i18n.t("ui.message.forkMessage")}
+                      useV2={props.useV2Actions}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void props.actions?.fork?.({
+                          sessionID: props.message.sessionID,
+                          messageID: props.message.id,
+                        })
+                      }}
+                      aria-label={i18n.t("ui.message.forkMessage")}
+                    />
+                  </Show>
                   <Show when={props.actions?.edit}>
                     <MessageActionButton
                       icon="edit"

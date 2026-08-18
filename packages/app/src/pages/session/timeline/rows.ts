@@ -21,6 +21,10 @@ export type TimelineRowMap = {
     userMessageID: string
     label: "compaction" | "interrupted"
   }
+  BranchFrom: {
+    originSessionID: string
+    title: string
+  }
   AssistantPart: {
     userMessageID: string
     group: PartGroup

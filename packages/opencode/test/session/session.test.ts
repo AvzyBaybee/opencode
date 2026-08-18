@@ -233,7 +233,10 @@ describe("Session", () => {
       )
 
       expect(saved.metadata).toEqual(meta)
-      expect(fork.metadata).toEqual(meta)
+      expect(fork.metadata).toEqual({
+        ...meta,
+        branchedFrom: { sessionID: created.id, title: "with-meta" },
+      })
       expect(fork.metadata).not.toBe(meta)
     }),
   )

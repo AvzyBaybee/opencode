@@ -707,6 +707,7 @@ export const dict = {
 
   "session.context.addToContext": "Add {{selection}} to context",
   "session.todo.title": "Todos",
+  "session.branchedFrom": "Branched from",
   "session.todo.collapse": "Collapse",
   "session.todo.expand": "Expand",
   "session.todo.progress": "{{done}} of {{total}} todos completed",

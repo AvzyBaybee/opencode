@@ -29,10 +29,25 @@ export function formatServerError(error: unknown, translate?: Translator, fallba
   const unwrapped = unwrapNamedError(error)
   if (isConfigInvalidErrorLike(unwrapped)) return parseReadableConfigInvalidError(unwrapped, translate)
   if (isProviderModelNotFoundErrorLike(unwrapped)) return parseReadableProviderModelNotFoundError(unwrapped, translate)
+  const unknown = unknownErrorText(unwrapped) ?? unknownErrorText(error)
+  if (unknown) return unknown
   if (error instanceof Error && error.message) return error.message
   if (typeof error === "string" && error) return error
   if (fallback) return fallback
   return tr(translate, "error.chain.unknown", "Unknown error")
+}
+
+export function formatSessionEventError(error: unknown, fallback: string) {
+  if (!error) return fallback
+  if (typeof error === "string" && error) return error
+  const unknown = unknownErrorText(error)
+  if (unknown) return unknown
+  if (typeof error !== "object") return fallback
+  const data = "data" in error ? error.data : undefined
+  if (data && typeof data === "object" && "message" in data && typeof data.message === "string" && data.message.trim())
+    return data.message.trim()
+  if ("name" in error && typeof error.name === "string" && error.name) return error.name
+  return fallback
 }
 
 function unwrapNamedError(error: unknown): unknown {
@@ -40,6 +55,19 @@ function unwrapNamedError(error: unknown): unknown {
     return (error.cause as Record<string, unknown>).body
   }
   return error
+}
+
+function unknownErrorText(error: unknown) {
+  if (!error || typeof error !== "object") return
+  const value = error as Record<string, unknown>
+  if (value.name !== "UnknownError" && value._tag !== "UnknownError") return
+  const data = value.data
+  if (!data || typeof data !== "object") return
+  const payload = data as Record<string, unknown>
+  const message = typeof payload.message === "string" ? payload.message.trim() : ""
+  const ref = typeof payload.ref === "string" ? payload.ref.trim() : ""
+  if (message && ref) return `${message} (${ref})`
+  if (message) return message
 }
 
 // Client-synthesized session not-found errors share one constructor and

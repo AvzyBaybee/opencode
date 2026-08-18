@@ -71,6 +71,8 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { sessionTitle } from "@/utils/session-title"
+import { sessionBranchOrigin } from "@/utils/session-branch"
+import { SessionBranchedFrom } from "@/components/session-branched-from"
 import { scheduleConnectedMeasure } from "./measure"
 import { observeElementOffsetReconnectAware } from "./observe-element-offset"
 import { createTimelineProjection } from "./projection"
@@ -83,7 +85,7 @@ const emptyTools: ToolPart[] = []
 const emptyAssistantMessages: AssistantMessage[] = []
 const idle = { type: "idle" as const }
 
-type FramedTimelineRow = Exclude<TimelineRow.TimelineRow, { _tag: "TurnGap" }>
+type FramedTimelineRow = Exclude<TimelineRow.TimelineRow, { _tag: "TurnGap" | "BranchFrom" }>
 type TimelineRowByTag<T extends TimelineRow.TimelineRow["_tag"]> = Extract<TimelineRow.TimelineRow, { _tag: T }>
 
 const timelineFallbackItemSize = 60
@@ -297,6 +299,14 @@ export function MessageTimeline(props: {
   const shareUrl = createMemo(() => info()?.share?.url)
   const shareEnabled = createMemo(() => sync().data.config.share !== "disabled")
   const parentID = createMemo(() => info()?.parentID)
+  const branchOrigin = createMemo(() => sessionBranchOrigin(info()?.metadata))
+  const branchOriginHref = createMemo(() => {
+    const origin = branchOrigin()
+    if (!origin) return
+    return params.serverKey
+      ? sessionHref(requireServerKey(params.serverKey), origin.sessionID)
+      : legacySessionHref(sdk().directory, origin.sessionID)
+  })
   const parent = createMemo(() => {
     const id = parentID()
     if (!id) return
@@ -334,6 +344,7 @@ export function MessageTimeline(props: {
     status: sessionStatus,
     showReasoningSummaries: settings.general.showReasoningSummaries,
     inlineComments: settings.general.newLayoutDesigns,
+    branchOrigin,
   })
   const activeMessageID = projection.activeMessageID
   const assistantMessagesByParent = projection.assistantMessagesByParent
@@ -1118,6 +1129,16 @@ export function MessageTimeline(props: {
     switch (row()._tag) {
       case "TurnGap":
         return <div data-timeline-row="TurnGap" aria-hidden="true" class="h-6" />
+      case "BranchFrom": {
+        const branchFromRow = row as Accessor<TimelineRowByTag<"BranchFrom">>
+        const href = branchOriginHref()
+        if (!href) return
+        return (
+          <div data-timeline-row="BranchFrom" class="w-full">
+            <SessionBranchedFrom href={href} title={branchFromRow().title} />
+          </div>
+        )
+      }
       case "CommentStrip": {
         const commentStripRow = row as Accessor<TimelineRowByTag<"CommentStrip">>
         const comments = createMemo(() =>

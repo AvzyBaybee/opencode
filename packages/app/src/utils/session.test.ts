@@ -33,6 +33,7 @@ describe("normalizeSessionInfo", () => {
       model: { id: "gpt-5", providerID: "openai", variant: "high" },
       version: "",
       time: { created: 1, updated: 1 },
+      metadata: undefined,
       revert: { messageID: "message-1", partID: "part-1", snapshot: "snapshot" },
     })
   })

@@ -207,12 +207,14 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       params: { sessionID: SessionID }
       payload?: typeof ForkPayload.Type
     }) {
-      return yield* SessionError.mapStorageNotFound(
+      const forked = yield* SessionError.mapStorageNotFound(
         session.fork({
           sessionID: ctx.params.sessionID,
           messageID: ctx.payload?.messageID,
         }),
       )
+      yield* promptSvc.nameForked(forked.id).pipe(Effect.ignore, Effect.forkIn(scope))
+      return forked
     })
 
     const forkRaw = Effect.fn("SessionHttpApi.forkRaw")(function* (ctx: {

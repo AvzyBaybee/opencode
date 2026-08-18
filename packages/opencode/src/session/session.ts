@@ -54,6 +54,15 @@ export function isDefaultTitle(title: string) {
   ).test(title)
 }
 
+export function branchTitle(originTitle: string) {
+  const label = isDefaultTitle(originTitle)
+    ? originTitle.startsWith(childTitlePrefix)
+      ? "Child session"
+      : "New session"
+    : originTitle
+  return `[Branch] ${label}`
+}
+
 type SessionRow = typeof SessionTable.$inferSelect
 
 export function fromRow(row: SessionRow): Info {
@@ -156,16 +165,6 @@ export function toRow(info: Info) {
     time_compacting: info.time.compacting,
     time_archived: info.time.archived,
   }
-}
-
-function getForkedTitle(title: string): string {
-  const match = title.match(/^(.+) \(fork #(\d+)\)$/)
-  if (match) {
-    const base = match[1]
-    const num = parseInt(match[2], 10)
-    return `${base} (fork #${num + 1})`
-  }
-  return `${title} (fork #1)`
 }
 
 function sessionPath(worktree: string, cwd: string) {
@@ -693,22 +692,42 @@ const layer: Layer.Layer<
     const fork = Effect.fn("Session.fork")(function* (input: { sessionID: SessionID; messageID?: MessageID }) {
       const ctx = yield* InstanceState.context
       const original = yield* get(input.sessionID)
-      const title = getForkedTitle(original.title)
+      const msgs = yield* messages({ sessionID: input.sessionID })
+      const target = input.messageID ? msgs.findIndex((msg) => msg.info.id === input.messageID) : msgs.length
+      const prefix = msgs.slice(0, target < 0 ? msgs.length : target)
+      const idMap = new Map<string, MessageID>()
+      for (const msg of prefix) idMap.set(msg.info.id, MessageID.ascending())
+      const lastClonedUser = prefix.findLast((msg) => msg.info.role === "user")
+      const afterUserMessageID = lastClonedUser ? idMap.get(lastClonedUser.info.id) : undefined
+      const branchedModel =
+        original.model ??
+        (lastClonedUser
+          ? {
+              id: lastClonedUser.info.model.modelID,
+              providerID: lastClonedUser.info.model.providerID,
+              variant: lastClonedUser.info.model.variant,
+            }
+          : undefined)
       const session = yield* createNext({
         directory: ctx.directory,
         path: sessionPath(ctx.worktree, ctx.directory),
         workspaceID: original.workspaceID,
-        title,
-        metadata: structuredClone(original.metadata),
+        title: branchTitle(original.title),
+        agent: original.agent ?? lastClonedUser?.info.agent,
+        model: branchedModel,
+        metadata: {
+          ...(structuredClone(original.metadata) ?? {}),
+          branchedFrom: {
+            sessionID: original.id,
+            title: original.title,
+            ...(afterUserMessageID && { afterUserMessageID }),
+          },
+        },
       })
-      const msgs = yield* messages({ sessionID: input.sessionID })
-      const idMap = new Map<string, MessageID>()
-      const target = input.messageID ? msgs.findIndex((msg) => msg.info.id === input.messageID) : msgs.length
 
-      for (const msg of msgs.slice(0, target < 0 ? msgs.length : target)) {
-        const newID = MessageID.ascending()
-        idMap.set(msg.info.id, newID)
-
+      for (const msg of prefix) {
+        const newID = idMap.get(msg.info.id)
+        if (!newID) continue
         const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
         const cloned = yield* updateMessage({
           ...msg.info,

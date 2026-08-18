@@ -73,6 +73,7 @@ function sessionInfo(session: Session): SessionInfo {
     tokens: session.tokens ?? { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     time: session.time,
     title: session.title,
+    metadata: session.metadata,
     location: { directory: session.directory, workspaceID: session.workspaceID },
     subpath: session.path,
     revert: session.revert && {
@@ -80,7 +81,7 @@ function sessionInfo(session: Session): SessionInfo {
       partID: session.revert.partID,
       snapshot: session.revert.snapshot,
     },
-  }
+  } as SessionInfo
 }
 
 export function createCompatibleApi(input: CompatibleInput): CompatibleApi {
