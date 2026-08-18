@@ -1,13 +1,15 @@
 import { batch, type Accessor } from "solid-js"
 import type { SetStoreFunction, Store } from "solid-js/store"
-import type {
-  PromptInputV2AgentPart,
-  PromptInputV2Attachment,
-  PromptInputV2Comment,
-  PromptInputV2FilePart,
-  PromptInputV2Model,
-  PromptInputV2PersistedState,
-  PromptInputV2Prompt,
+import {
+  isDetachedPromptPart,
+  type PromptInputV2AgentPart,
+  type PromptInputV2Attachment,
+  type PromptInputV2Comment,
+  type PromptInputV2FilePart,
+  type PromptInputV2Model,
+  type PromptInputV2PastePart,
+  type PromptInputV2PersistedState,
+  type PromptInputV2Prompt,
 } from "./types"
 
 export type PromptInputV2StoreTuple = [
@@ -96,8 +98,26 @@ export function createPromptInputV2Store(input: PromptInputV2StoreInput) {
     addAttachment(attachment: PromptInputV2Attachment) {
       setStore()("prompt", (prompt) => [...prompt, attachment])
     },
+    addPaste(part: PromptInputV2PastePart) {
+      setStore()("prompt", (prompt) => [...prompt, part])
+    },
+    expandPaste(id: string) {
+      const part = store().prompt.find((entry): entry is PromptInputV2PastePart => entry.type === "paste" && entry.id === id)
+      if (!part) return
+      const cursor = store().cursor ?? promptLength(store().prompt)
+      batch(() => {
+        setStore()("prompt", (prompt) =>
+          insertText(
+            prompt.filter((entry) => entry.type !== "paste" || entry.id !== id),
+            cursor,
+            part.text,
+          ),
+        )
+        setStore()("cursor", cursor + part.text.length)
+      })
+    },
     removeAttachment(id: string) {
-      setStore()("prompt", (parts) => parts.filter((part) => part.type !== "image" || part.id !== id))
+      setStore()("prompt", (parts) => parts.filter((part) => !isDetachedPromptPart(part) || part.id !== id))
     },
   }
 }
@@ -108,7 +128,7 @@ function insertText(prompt: PromptInputV2Prompt, cursor: number, content: string
   let position = 0
   let inserted = false
   const parts = prompt.flatMap<PromptInputV2Prompt[number]>((part) => {
-    if (part.type === "image") return [part]
+    if (isDetachedPromptPart(part)) return [part]
     const start = position
     position += part.content.length
     if (inserted) return [part]
@@ -130,7 +150,7 @@ function needsMentionLeadingSpace(prompt: PromptInputV2Prompt, end: number) {
 
   let position = 0
   for (const part of prompt) {
-    if (part.type === "image") continue
+    if (isDetachedPromptPart(part)) continue
     const partStart = position
     const partEnd = position + part.content.length
 
@@ -157,7 +177,7 @@ function needsMentionLeadingSpace(prompt: PromptInputV2Prompt, end: number) {
 function mentionInsertStart(prompt: PromptInputV2Prompt, end: number) {
   let position = 0
   for (const part of prompt) {
-    if (part.type === "image") continue
+    if (isDetachedPromptPart(part)) continue
     const partStart = position
     const partEnd = position + part.content.length
     if (end < partStart) return end
@@ -180,7 +200,7 @@ function insertMention(
   let position = 0
   let inserted = false
   const parts = prompt.flatMap<PromptInputV2Prompt[number]>((part) => {
-    if (part.type === "image") return [part]
+    if (isDetachedPromptPart(part)) return [part]
     const partStart = position
     const partEnd = position + part.content.length
     position = partEnd
@@ -207,7 +227,7 @@ function insertMention(
 function withOffsets(prompt: PromptInputV2Prompt): PromptInputV2Prompt {
   let offset = 0
   return prompt.map((part) => {
-    if (part.type === "image") return part
+    if (isDetachedPromptPart(part)) return part
     const next = { ...part, start: offset, end: offset + part.content.length }
     offset = next.end
     return next

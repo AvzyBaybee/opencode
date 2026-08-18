@@ -34,6 +34,18 @@ describe("prompt-input history", () => {
     const withOne = prependHistoryEntry([], text("hello"))
     expect(withOne).toHaveLength(1)
 
+    const pasteOnly = prependHistoryEntry([], [
+      {
+        type: "paste",
+        id: "p1",
+        createdAt: 1,
+        ordinal: 1,
+        preview: "hello",
+        text: "hello",
+      },
+    ])
+    expect(pasteOnly).toHaveLength(1)
+
     const deduped = prependHistoryEntry(withOne, text("hello"))
     expect(deduped).toBe(withOne)
 

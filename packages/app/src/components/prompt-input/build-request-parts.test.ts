@@ -393,4 +393,32 @@ describe("buildRequestParts", () => {
       expect(filePart.url).toContain("/..")
     }
   })
+
+  test("appends large pasted text as XML after the typed prompt", () => {
+    const result = buildRequestParts({
+      prompt: [
+        { type: "text", content: "Please review", start: 0, end: 13 },
+        {
+          type: "paste",
+          id: "paste_1",
+          createdAt: Date.UTC(2026, 7, 18),
+          ordinal: 1,
+          preview: "huge dump",
+          text: "huge dump",
+        },
+      ],
+      context: [],
+      images: [],
+      text: "Please review",
+      messageID: "msg_paste",
+      sessionID: "ses_paste",
+      sessionDirectory: "/repo",
+    })
+
+    expect(result.requestParts[0]?.type).toBe("text")
+    if (result.requestParts[0]?.type === "text") {
+      expect(result.requestParts[0].text).toContain("<pasted_texts>")
+      expect(result.requestParts[0].text).toContain("huge dump")
+    }
+  })
 })

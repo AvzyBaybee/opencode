@@ -160,6 +160,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
   const attachments = createMemo(() =>
     prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
   )
+  const pasteCount = createMemo(() => prompt.current().filter((part) => part.type === "paste").length)
   const commentCount = createMemo(() => {
     if (mode() === "shell") return 0
     return prompt.context.items().filter((item) => !!item.comment?.trim()).length
@@ -169,7 +170,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       .current()
       .map((part) => ("content" in part ? part.content : ""))
       .join("")
-    return text.trim().length === 0 && attachments().length === 0 && commentCount() === 0
+    return text.trim().length === 0 && attachments().length === 0 && pasteCount() === 0 && commentCount() === 0
   })
   const stopping = createMemo(() => working() && blank())
   const placeholder = createMemo(() =>
@@ -392,6 +393,25 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
     openAttachment: (attachment) =>
       dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />),
+    openPaste: (paste) => {
+      const date = new Date(paste.createdAt).toLocaleDateString(language.intl(), {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+      const title =
+        paste.ordinal > 1
+          ? language.t("ui.promptInput.pasteTitleNumbered", { date, n: paste.ordinal })
+          : language.t("ui.promptInput.pasteTitle", { date })
+      dialog.show(() => (
+        <div class="max-h-[70vh] w-[min(720px,calc(100vw-32px))] overflow-hidden rounded-xl bg-v2-background-bg-base p-4 shadow-[var(--v2-elevation-raised)]">
+          <div class="mb-2 text-[13px] font-[530] text-v2-text-text-base">{title}</div>
+          <pre class="max-h-[60vh] overflow-auto whitespace-pre-wrap text-[13px] leading-5 text-v2-text-text-base">
+            {paste.text}
+          </pre>
+        </div>
+      ))
+    },
     openContext(key) {
       const item = controller.contextItem(key)
       if (item) openComment(item, props, sync, layout, files, comments)

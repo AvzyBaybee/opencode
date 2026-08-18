@@ -3,14 +3,17 @@ import { createStore, reconcile } from "solid-js/store"
 import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { createPromptInputV2Attachments, type PromptInputV2AttachmentConfig } from "./attachments"
 import { createPromptInputV2Store, type PromptInputV2StoreInput } from "./store"
-import type {
-  PromptInputV2Attachment,
-  PromptInputV2Comment,
-  PromptInputV2History,
-  PromptInputV2HistoryEntry,
-  PromptInputV2Option,
-  PromptInputV2PersistedState,
-  PromptInputV2Suggestion,
+import { createPastePart, isLargePaste, normalizePastedText } from "./large-paste"
+import {
+  isDetachedPromptPart,
+  type PromptInputV2Attachment,
+  type PromptInputV2Comment,
+  type PromptInputV2History,
+  type PromptInputV2HistoryEntry,
+  type PromptInputV2Option,
+  type PromptInputV2PastePart,
+  type PromptInputV2PersistedState,
+  type PromptInputV2Suggestion,
 } from "./types"
 import {
   createPromptInputV2InteractionState,
@@ -62,6 +65,7 @@ export function createPromptInputV2Controller(input: {
   context: Accessor<PromptInputV2Suggestion[]>
   searchContextFiles: (query: string) => PromptInputV2Suggestion[] | Promise<PromptInputV2Suggestion[]>
   openAttachment?: (attachment: PromptInputV2Attachment) => void
+  openPaste?: (paste: PromptInputV2PastePart) => void
   openContext?: (key: string) => void
   onContextRemove?: (item: PromptInputV2Comment) => void
   onEditor?: (element: HTMLElement) => void
@@ -77,7 +81,7 @@ export function createPromptInputV2Controller(input: {
     createEffect(on(input.identity, () => setState(reconcile(createPromptInputV2InteractionState())), { defer: true }))
   }
   function addPart(part: PromptInputV2PersistedState["prompt"][number]) {
-    if (part.type === "image") return false
+    if (isDetachedPromptPart(part)) return false
     if (part.type === "file" || part.type === "agent") {
       draft.addMention(part)
       return true
@@ -168,7 +172,7 @@ export function createPromptInputV2Controller(input: {
       if (!action || state.popover.type !== "command-menu") result.commands.forEach(execute)
       if (action && event.item.kind === "command" && state.popover.type !== "command-menu") {
         draft.setPrompt(
-          draft.state.prompt.filter((part): part is PromptInputV2Attachment => part.type === "image"),
+          draft.state.prompt.filter(isDetachedPromptPart),
           0,
         )
       }
@@ -315,6 +319,9 @@ export function createPromptInputV2Controller(input: {
     attachments(): PromptInputV2Attachment[] {
       return draft.state.prompt.filter((part): part is PromptInputV2Attachment => part.type === "image")
     },
+    pastes(): PromptInputV2PastePart[] {
+      return draft.state.prompt.filter((part): part is PromptInputV2PastePart => part.type === "paste")
+    },
     toggleContext(id: string) {
       dispatch({ type: "context.active", id })
       input.openContext?.(id)
@@ -328,12 +335,19 @@ export function createPromptInputV2Controller(input: {
     openAttachment(attachment: PromptInputV2Attachment) {
       input.openAttachment?.(attachment)
     },
+    openPaste(paste: PromptInputV2PastePart) {
+      input.openPaste?.(paste)
+    },
+    expandPaste(id: string) {
+      draft.expandPaste(id)
+      restoreFocus()
+    },
     removeAttachment(id: string) {
       draft.removeAttachment(id)
     },
     canSubmit() {
       const persisted = draft.state
-      if (persisted.prompt.some((part) => part.type === "image")) return true
+      if (persisted.prompt.some(isDetachedPromptPart)) return true
       if (persisted.context.items.some((item) => !!item.comment?.trim())) return true
       return persisted.prompt.some((part) => "content" in part && !!part.content.trim())
     },
@@ -386,8 +400,15 @@ export function createPromptInputV2Controller(input: {
       }
       input.view.onPaste?.(event)
       if (event.defaultPrevented) return
-      const text = clipboard?.getData("text/plain")
-      if (!text) return
+      const raw = clipboard?.getData("text/plain")
+      if (!raw) return
+      const text = normalizePastedText(raw)
+      if (isLargePaste(text)) {
+        event.preventDefault()
+        draft.addPaste(createPastePart(text, draft.state.prompt))
+        restoreFocus()
+        return
+      }
       event.preventDefault()
       if (typeof document.execCommand === "function" && document.execCommand("insertText", false, text)) return
       const target = event.currentTarget

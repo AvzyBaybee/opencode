@@ -137,6 +137,55 @@ describe("prompt input v2 store", () => {
     expect(prompt.state.cursor).toBe(15)
   })
 
+  test("keeps paste chips when replacing editor text", () => {
+    const [state, setState] = createStore<PromptInputV2PersistedState>({
+      prompt: [
+        { type: "text", content: "note", start: 0, end: 4 },
+        {
+          type: "paste",
+          id: "paste-1",
+          createdAt: 1,
+          ordinal: 1,
+          preview: "hello",
+          text: "hello",
+        },
+      ],
+      cursor: 4,
+      context: { items: [] },
+    })
+    const prompt = createPromptInputV2Store([state, setState])
+
+    prompt.setText("updated")
+    prompt.removeAttachment("paste-1")
+
+    expect(prompt.state.prompt.some((part) => part.type === "paste")).toBe(false)
+    expect(prompt.state.prompt[0]).toEqual({ type: "text", content: "updated", start: 0, end: 7 })
+  })
+
+  test("expands a paste chip into the text field at the cursor", () => {
+    const [state, setState] = createStore<PromptInputV2PersistedState>({
+      prompt: [
+        { type: "text", content: "before", start: 0, end: 6 },
+        {
+          type: "paste",
+          id: "paste-1",
+          createdAt: 1,
+          ordinal: 1,
+          preview: "DUMP",
+          text: "DUMP",
+        },
+      ],
+      cursor: 6,
+      context: { items: [] },
+    })
+    const prompt = createPromptInputV2Store([state, setState])
+
+    prompt.expandPaste("paste-1")
+
+    expect(prompt.state.prompt).toEqual([{ type: "text", content: "beforeDUMP", start: 0, end: 10 }])
+    expect(prompt.state.cursor).toBe(10)
+  })
+
   test("mutates context, attachments, and model through shared actions", () => {
     const prompt = createPromptStore()
     const context = { key: "file:src/index.ts", type: "file" as const, path: "src/index.ts" }

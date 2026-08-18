@@ -329,8 +329,9 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const text = currentPrompt.map((part) => ("content" in part ? part.content : "")).join("")
     const images = input.imageAttachments().slice()
     const mode = input.mode()
+    const hasPastes = currentPrompt.some((part) => part.type === "paste")
 
-    if (text.trim().length === 0 && images.length === 0 && input.commentCount() === 0) {
+    if (text.trim().length === 0 && images.length === 0 && !hasPastes && input.commentCount() === 0) {
       if (input.working()) void abort()
       return
     }

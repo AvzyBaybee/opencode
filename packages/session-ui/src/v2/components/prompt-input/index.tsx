@@ -13,13 +13,15 @@ import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { AttachmentCardV2 } from "../attachment-card-v2"
 import { CommentCardV2 } from "../comment-card-v2"
 import { typeLabel } from "../../../components/message-file"
-import type {
-  PromptInputV2Attachment,
-  PromptInputV2Comment,
-  PromptInputV2Option,
-  PromptInputV2PersistedState,
-  PromptInputV2Prompt,
-  PromptInputV2Suggestion,
+import {
+  isDetachedPromptPart,
+  type PromptInputV2Attachment,
+  type PromptInputV2Comment,
+  type PromptInputV2Option,
+  type PromptInputV2PastePart,
+  type PromptInputV2PersistedState,
+  type PromptInputV2Prompt,
+  type PromptInputV2Suggestion,
 } from "./types"
 import type { PromptInputV2Interaction, PromptInputV2SelectControl } from "./interaction"
 import { setPromptInputV2EditorCursor } from "./interaction"
@@ -29,9 +31,11 @@ export type {
   PromptInputV2Attachment,
   PromptInputV2Comment,
   PromptInputV2Option,
+  PromptInputV2PastePart,
   PromptInputV2PersistedState,
   PromptInputV2Suggestion,
 } from "./types"
+export { createPastePart, isLargePaste, LARGE_PASTE_CHARS } from "./large-paste"
 
 export type PromptInputV2Mode = "normal" | "shell"
 
@@ -142,11 +146,15 @@ export function PromptInputV2(props: PromptInputV2Props) {
         <Show when={state.mode === "normal"}>
           <PromptInputV2Attachments
             attachments={props.controller.attachments()}
+            pastes={props.controller.pastes()}
             comments={props.controller.comments()}
             activeCommentID={state.activeContextID}
             removeLabel={i18n.t("ui.promptInput.removeAttachment")}
             onAttachmentClick={props.controller.openAttachment}
             onAttachmentRemove={(attachment) => props.controller.removeAttachment(attachment.id)}
+            onPasteClick={props.controller.openPaste}
+            onPasteExpand={(paste) => props.controller.expandPaste(paste.id)}
+            onPasteRemove={(paste) => props.controller.removeAttachment(paste.id)}
             onCommentClick={(comment) => props.controller.toggleContext(comment.key)}
             onCommentRemove={(comment) => props.controller.removeContext(comment.key)}
           />
@@ -175,9 +183,9 @@ export function PromptInputV2(props: PromptInputV2Props) {
               if (syncingEditor) return
               const cursor = promptInputV2Cursor(event.currentTarget)
               const prompt = parsePromptInputV2Editor(event.currentTarget)
-              const images = props.controller.parts().filter((part) => part.type === "image")
+              const detached = props.controller.parts().filter(isDetachedPromptPart)
               localInput = true
-              props.controller.onInput(prompt.map((part) => part.content).join(""), [...prompt, ...images], cursor)
+              props.controller.onInput(prompt.map((part) => part.content).join(""), [...prompt, ...detached], cursor)
             }}
             onKeyDown={(event) => {
               if (props.controller.onKeyDown(event)) return
@@ -286,7 +294,7 @@ function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2
   const active = document.activeElement === editor
   editor.replaceChildren(
     ...prompt.flatMap<Node>((part) => {
-      if (part.type === "image") return []
+      if (isDetachedPromptPart(part)) return []
       if (part.type === "text") return [document.createTextNode(part.content)]
       const mention = document.createElement("span")
       mention.textContent = part.content
@@ -307,7 +315,7 @@ function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2
 }
 
 function parsePromptInputV2Editor(editor: HTMLDivElement) {
-  const parts: Exclude<PromptInputV2Prompt[number], PromptInputV2Attachment>[] = []
+  const parts: Exclude<PromptInputV2Prompt[number], PromptInputV2Attachment | PromptInputV2PastePart>[] = []
   let buffer = ""
   let position = 0
 
@@ -385,17 +393,30 @@ function promptInputV2Cursor(editor: HTMLDivElement) {
 
 export function PromptInputV2Attachments(props: {
   attachments: PromptInputV2Attachment[]
+  pastes?: PromptInputV2PastePart[]
   comments?: PromptInputV2Comment[]
   activeCommentID?: string
   removeLabel: string
   onAttachmentClick?: (attachment: PromptInputV2Attachment) => void
   onAttachmentRemove: (attachment: PromptInputV2Attachment) => void
+  onPasteClick?: (paste: PromptInputV2PastePart) => void
+  onPasteExpand?: (paste: PromptInputV2PastePart) => void
+  onPasteRemove?: (paste: PromptInputV2PastePart) => void
   onCommentClick?: (comment: PromptInputV2Comment) => void
   onCommentRemove?: (comment: PromptInputV2Comment) => void
 }) {
   const i18n = useI18n()
+  const pasteTitle = (paste: PromptInputV2PastePart) => {
+    const date = new Date(paste.createdAt).toLocaleDateString(i18n.locale(), {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+    if (paste.ordinal > 1) return i18n.t("ui.promptInput.pasteTitleNumbered", { date, n: paste.ordinal })
+    return i18n.t("ui.promptInput.pasteTitle", { date })
+  }
   return (
-    <Show when={props.attachments.length > 0 || (props.comments?.length ?? 0) > 0}>
+    <Show when={props.attachments.length > 0 || (props.pastes?.length ?? 0) > 0 || (props.comments?.length ?? 0) > 0}>
       <div data-component="prompt-input-v2-attachments" data-slot="prompt-attachments" class="relative">
         <div
           data-slot="prompt-attachments-scroll"
@@ -421,6 +442,53 @@ export function PromptInputV2Attachments(props: {
                 <button
                   type="button"
                   onClick={() => props.onCommentRemove?.(comment)}
+                  class="absolute -top-1 -end-1 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={props.removeLabel}
+                >
+                  <IconV2 name="outline-xmark" class="text-v2-icon-icon-contrast" />
+                </button>
+              </div>
+            )}
+          </For>
+          <For each={props.pastes ?? []}>
+            {(paste) => (
+              <div class="relative group shrink-0">
+                <AttachmentCardV2
+                  title={paste.preview || pasteTitle(paste)}
+                  hover={pasteTitle(paste)}
+                  clickable={!!props.onPasteClick}
+                  onClick={() => props.onPasteClick?.(paste)}
+                >
+                  <FileIcon node={{ path: "paste.txt", type: "file" }} />
+                  <span class="min-w-0 truncate">
+                    {i18n.plural("ui.promptInput.pasteChars", paste.text.length, {
+                      formatted: paste.text.length.toLocaleString(i18n.locale()),
+                    })}
+                  </span>
+                  <Show when={props.onPasteExpand}>
+                    <TooltipV2
+                      value={i18n.t("ui.promptInput.pasteShowInField")}
+                      placement="top"
+                      class="ms-auto flex shrink-0"
+                    >
+                      <button
+                        type="button"
+                        class="grid size-3.5 place-items-center text-v2-icon-icon-muted hover:text-v2-text-text-base"
+                        aria-label={i18n.t("ui.promptInput.pasteShowInField")}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          props.onPasteExpand?.(paste)
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                      >
+                        <IconV2 name="expand" class="size-3.5" />
+                      </button>
+                    </TooltipV2>
+                  </Show>
+                </AttachmentCardV2>
+                <button
+                  type="button"
+                  onClick={() => props.onPasteRemove?.(paste)}
                   class="absolute -top-1 -end-1 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label={props.removeLabel}
                 >

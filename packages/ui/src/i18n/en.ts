@@ -138,6 +138,11 @@ export const dict: Record<string, string> = {
   "ui.promptInput.chooseVariant": "Choose model variant",
   "ui.promptInput.send": "Send",
   "ui.promptInput.stop": "Stop",
+  "ui.promptInput.pasteTitle": "Paste {{date}}",
+  "ui.promptInput.pasteTitleNumbered": "Paste {{date}} {{n}}",
+  "ui.promptInput.pasteShowInField": "Show in text field",
+  "ui.promptInput.pasteChars.one": "{{formatted}} character",
+  "ui.promptInput.pasteChars.other": "{{formatted}} characters",
 
   "ui.tabs.close": "Close tab",
 

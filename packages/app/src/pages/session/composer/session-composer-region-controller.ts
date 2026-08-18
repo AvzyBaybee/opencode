@@ -85,6 +85,7 @@ export function createSessionComposerRegionController(input: {
           if (part.type === "file") return `[file:${part.path}]`
           if (part.type === "agent") return `@${part.name}`
           if (part.type === "image") return `[image:${part.filename}]`
+          if (part.type === "paste") return `[paste:${part.preview || part.ordinal}]`
           return part.content
         })
         .join("")

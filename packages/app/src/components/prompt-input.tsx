@@ -269,6 +269,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const imageAttachments = createMemo(() =>
     prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
   )
+  const detachedParts = createMemo(() =>
+    prompt.current().filter((part) => part.type === "image" || part.type === "paste"),
+  )
 
   const [store, setStore] = createPromptInputTransientState(
     () => prompt.capture(),
@@ -294,7 +297,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       .current()
       .map((part) => ("content" in part ? part.content : ""))
       .join("")
-    return text.trim().length === 0 && imageAttachments().length === 0 && commentCount() === 0
+    return text.trim().length === 0 && detachedParts().length === 0 && commentCount() === 0
   })
   const stopping = createMemo(() => working() && blank())
   const tip = () => {
@@ -732,7 +735,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!cmd) return
     const menu = store.slashMenu
     closePopover()
-    const images = imageAttachments()
+    const images = detachedParts()
 
     if (cmd.type === "custom") {
       const text = `/${cmd.trigger} `
@@ -985,7 +988,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const handleInput = () => {
     const rawParts = parseFromDOM()
-    const images = imageAttachments()
+    const images = detachedParts()
     const cursorPosition = getCursorPosition(editorRef)
     const rawText =
       rawParts.length === 1 && rawParts[0]?.type === "text"
@@ -1034,7 +1037,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }
 
   const addPart = (part: ContentPart) => {
-    if (part.type === "image") return false
+    if (part.type === "image" || part.type === "paste") return false
 
     const selection = window.getSelection()
     if (!selection) return false
@@ -1406,6 +1409,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           .join("")
           .trim().length === 0 &&
         imageAttachments().length === 0 &&
+        prompt.current().every((part) => part.type !== "paste") &&
         commentCount() === 0
       ) {
         return

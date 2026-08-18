@@ -1,4 +1,9 @@
-import type { PromptInputV2HistoryEntry, PromptInputV2PersistedState, PromptInputV2Suggestion } from "./types"
+import {
+  isDetachedPromptPart,
+  type PromptInputV2HistoryEntry,
+  type PromptInputV2PersistedState,
+  type PromptInputV2Suggestion,
+} from "./types"
 
 export type PromptInputV2InteractionState = {
   mode: "normal" | "shell"
@@ -235,7 +240,7 @@ function populated(persisted: PromptInputV2PersistedState) {
   return (
     !!promptText(persisted).trim() ||
     persisted.context.items.length > 0 ||
-    persisted.prompt.some((part) => part.type === "file" || part.type === "image")
+    persisted.prompt.some((part) => part.type === "file" || isDetachedPromptPart(part))
   )
 }
 

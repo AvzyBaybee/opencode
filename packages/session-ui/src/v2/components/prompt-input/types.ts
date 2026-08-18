@@ -34,12 +34,28 @@ export type PromptInputV2Attachment = {
   blob: { id: string; url: string }
 }
 
+export type PromptInputV2PastePart = {
+  type: "paste"
+  id: string
+  createdAt: number
+  ordinal: number
+  preview: string
+  text: string
+}
+
 export type PromptInputV2Prompt = (
   | PromptInputV2TextPart
   | PromptInputV2FilePart
   | PromptInputV2AgentPart
   | PromptInputV2Attachment
+  | PromptInputV2PastePart
 )[]
+
+export function isDetachedPromptPart(
+  part: PromptInputV2Prompt[number],
+): part is PromptInputV2Attachment | PromptInputV2PastePart {
+  return part.type === "image" || part.type === "paste"
+}
 
 export type PromptInputV2Model = {
   providerID: string
