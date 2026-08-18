@@ -116,6 +116,40 @@ const previewButtonState = new WeakMap<HTMLElement, PreviewButtonState>()
 const floatingCopyButtons = new WeakMap<HTMLElement, HTMLElement>()
 const copyPlaceholders = new WeakMap<HTMLElement, HTMLDivElement>()
 const markdownActionOwner = new WeakMap<HTMLElement, HTMLDivElement>()
+const copyButtonWrappers = new WeakMap<HTMLElement, HTMLElement>()
+
+function writeClipboard(text: string) {
+  const body = typeof document === "undefined" ? undefined : document.body
+  if (body) {
+    const textarea = document.createElement("textarea")
+    textarea.value = text
+    textarea.setAttribute("readonly", "")
+    textarea.style.position = "fixed"
+    textarea.style.opacity = "0"
+    textarea.style.pointerEvents = "none"
+    body.appendChild(textarea)
+    textarea.select()
+    const copied = document.execCommand("copy")
+    body.removeChild(textarea)
+    if (copied) return true
+  }
+
+  const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard
+  if (!clipboard?.writeText) return false
+  return clipboard.writeText(text).then(
+    () => true,
+    () => false,
+  )
+}
+
+function codeCopyContent(button: HTMLElement) {
+  const wrapper =
+    button.closest<HTMLElement>('[data-component="markdown-code"]') ??
+    copyButtonWrappers.get(button) ??
+    copyPlaceholders.get(button)?.closest<HTMLElement>('[data-component="markdown-code"]')
+  if (!wrapper) return ""
+  return wrapper.querySelector("pre code")?.textContent ?? ""
+}
 
 const urlPattern = /^https?:\/\/[^\s<>()`"']+$/
 
@@ -280,6 +314,7 @@ function ensureCodeActions(
     copy = createCopyButton(labels)
     actions.appendChild(copy)
   }
+  copyButtonWrappers.set(copy, wrapper)
 
   const isMarkdown = codeKind(language) === "markdown"
   const preview = actions.querySelector('[data-slot="markdown-preview-button"]')
@@ -462,12 +497,9 @@ function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels, getPre
 
     const button = target.closest('[data-slot="markdown-copy-button"]')
     if (!(button instanceof HTMLElement)) return
-    const code = button.closest('[data-component="markdown-code"]')?.querySelector("code")
-    const content = code?.textContent ?? ""
+    const content = codeCopyContent(button)
     if (!content) return
-    const clipboard = navigator?.clipboard
-    if (!clipboard) return
-    await clipboard.writeText(content)
+    if (!(await writeClipboard(content))) return
     const labels = getLabels()
     setCopyState(button, labels, true)
     const existing = timeouts.get(button)
@@ -591,6 +623,7 @@ function setupStickyCodeActions(root: HTMLDivElement) {
       }
 
       markdownActionOwner.set(copy, root)
+      copyButtonWrappers.set(copy, wrapper)
       const wrapperRect = wrapper.getBoundingClientRect()
       const copyRect = copy.getBoundingClientRect()
       const canPin =
