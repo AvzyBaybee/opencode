@@ -299,12 +299,22 @@
   pre {
     margin-top: 12px;
     margin-bottom: 24px;
-    overflow: auto;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 
     scrollbar-width: none;
     &::-webkit-scrollbar {
       display: none;
     }
+  }
+
+  pre code,
+  .shiki .line {
+    white-space: inherit;
+    overflow-wrap: inherit;
+    word-break: inherit;
   }
 
   :not(pre) > code {
