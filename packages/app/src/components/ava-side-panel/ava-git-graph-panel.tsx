@@ -113,6 +113,7 @@ function gitGraphCopy(t: ReturnType<typeof useLanguage>["t"]) {
     createRepository: t("ava.gitGraph.createRepository"),
     firstThreadName: t("ava.gitGraph.firstThreadName"),
     renameBranch: t("ava.gitGraph.renameBranch"),
+    changeColor: t("ava.gitGraph.changeColor"),
     pushAllToCloud: t("ava.gitGraph.pushAllToCloud"),
     pushingCloud: t("ava.gitGraph.pushingCloud"),
     searchBackups: t("ava.gitGraph.searchBackups"),

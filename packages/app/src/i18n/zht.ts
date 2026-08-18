@@ -44,6 +44,7 @@ export const dict = {
   "desktop.menu.minimize": "最小化",
   "desktop.menu.maximize": "最大化",
   "desktop.menu.documentation": "OpenCode 文件",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "支援論壇",
   "desktop.menu.shareFeedback": "提供意見回饋",
   "desktop.menu.reportBug": "回報錯誤",
@@ -120,6 +121,9 @@ export const dict = {
 
   "command.category.settings": "設定",
   "command.logs.export": "匯出記錄檔",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
   "theme.scheme.system": "系統",
   "theme.scheme.light": "淺色",
   "theme.scheme.dark": "深色",

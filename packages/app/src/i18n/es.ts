@@ -40,6 +40,7 @@ export const dict = {
   "desktop.menu.minimize": "Minimizar",
   "desktop.menu.maximize": "Maximizar",
   "desktop.menu.documentation": "Documentación de OpenCode",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "Foro de asistencia",
   "desktop.menu.shareFeedback": "Enviar comentarios",
   "desktop.menu.reportBug": "Informar de un error",
@@ -117,6 +118,9 @@ export const dict = {
   "command.category.workspace": "Espacio de trabajo",
   "command.category.settings": "Ajustes",
   "command.logs.export": "Exportar registros",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "theme.scheme.system": "Sistema",
   "theme.scheme.light": "Claro",

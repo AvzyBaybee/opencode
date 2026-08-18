@@ -66,6 +66,9 @@ import { ErrorPage } from "./pages/error"
 import { useCheckServerHealth } from "./utils/server-health"
 import { legacySessionHref, legacySessionServer, requireServerKey, sessionHref } from "./utils/session-route"
 import { createSessionLineage } from "@/pages/session/session-lineage"
+import { AGENT_INSTRUCTION_SYSTEM_DOCUMENTATION } from "@/ava-agent-instruction-docs"
+import { copyTextToClipboard } from "@/components/ava-side-panel/ava-copy-selected-files"
+import { showToast } from "@/utils/toast"
 
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
 import { NewHome } from "@/pages/home"
@@ -331,7 +334,26 @@ function DesktopCommands() {
   const platform = usePlatform()
 
   command.register("desktop", () => {
-    const commands: CommandOption[] = []
+    const commands: CommandOption[] = [
+      {
+        id: "docs.copyAgentInstructionSystem",
+        title: language.t("command.docs.copyAgentInstructionSystem"),
+        category: language.t("command.category.agent"),
+        onSelect: () => {
+          void copyTextToClipboard(AGENT_INSTRUCTION_SYSTEM_DOCUMENTATION)
+            .then((ok) => {
+              if (ok) {
+                showToast({ title: language.t("ava.docs.copyAgentInstructionSystem.success") })
+                return
+              }
+              showToast({ variant: "error", title: language.t("ava.docs.copyAgentInstructionSystem.failed") })
+            })
+            .catch(() => {
+              showToast({ variant: "error", title: language.t("ava.docs.copyAgentInstructionSystem.failed") })
+            })
+        },
+      },
+    ]
     if (platform.platform === "desktop" && platform.exportDebugLogs) {
       commands.push({
         id: "logs.export",

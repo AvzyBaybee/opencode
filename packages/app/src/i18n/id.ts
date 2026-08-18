@@ -40,6 +40,7 @@ export const dict = {
   "desktop.menu.minimize": "Minimalkan",
   "desktop.menu.maximize": "Maksimalkan",
   "desktop.menu.documentation": "Dokumentasi OpenCode",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "Forum dukungan",
   "desktop.menu.shareFeedback": "Bagikan umpan balik",
   "desktop.menu.reportBug": "Laporkan bug",
@@ -117,6 +118,9 @@ export const dict = {
   "command.category.workspace": "Ruang kerja",
   "command.category.settings": "Pengaturan",
   "command.logs.export": "Ekspor log",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "theme.scheme.system": "Sistem",
   "theme.scheme.light": "Terang",

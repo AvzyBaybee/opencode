@@ -1051,6 +1051,9 @@ export const dict = {
   "settings.updates.action.installing": "설치 중...",
 
   "command.logs.export": "로그 내보내기",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "help.tabs.toast.ariaLabel": "탭을 소개합니다. 탭으로 작업과 활성 세션을 정리하세요",
   "help.tabs.toast.dismiss": "탭 정보 닫기",
@@ -1108,6 +1111,7 @@ export const dict = {
   "desktop.menu.minimize": "최소화",
   "desktop.menu.maximize": "최대화",
   "desktop.menu.documentation": "OpenCode 문서",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "지원 포럼",
   "desktop.menu.shareFeedback": "피드백 보내기",
   "desktop.menu.reportBug": "버그 신고",

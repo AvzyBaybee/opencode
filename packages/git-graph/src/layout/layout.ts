@@ -27,6 +27,7 @@ export type LaidOutCommit = {
   readonly cardHeight: number
   readonly branches: readonly string[]
   readonly labels: readonly CommitLabel[]
+  readonly owningBranch?: string
   readonly committerAt: number
   readonly onCloud: boolean
 }
@@ -39,6 +40,7 @@ export type LaidOutEdge = {
   readonly points: readonly GraphPoint[]
   readonly lane: number
   readonly colorLane: number
+  readonly colorBranch?: string
   readonly selectable: boolean
 }
 
@@ -93,6 +95,7 @@ type Measured = {
   lines: string[]
   labels: CommitLabel[]
   branches: string[]
+  owningBranch?: string
   cardHeight: number
 }
 
@@ -114,7 +117,8 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
   const lanePitch = cardWidth + laneGap
 
   const commits = orderCommits(snapshot.commits)
-  const laneByCommit = allocateLanes(commits, snapshot.head.commitID)
+  const laneByCommit = allocateLanes(commits, snapshot.refs, snapshot.head.commitID)
+  const ownerByCommit = owningBranchByCommit(commits, snapshot.refs, snapshot.head.commitID)
   const labelsByCommit = labelsByCommitID(snapshot.refs)
   const maxLane = maxNumber(laneByCommit.values(), 0)
 
@@ -129,6 +133,7 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
       lines: [truncateLabel(label, textWidth, fontSize)],
       labels,
       branches,
+      owningBranch: ownerByCommit.get(commit.id),
       cardHeight: DEFAULT_CARD_HEIGHT,
     }
   })
@@ -159,6 +164,7 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
       cardHeight: item.cardHeight,
       branches: item.branches,
       labels: item.labels,
+      owningBranch: item.owningBranch,
       committerAt: item.commit.committerAt,
       onCloud: item.commit.onCloud === true,
     })
@@ -230,7 +236,7 @@ export function layoutGraph(snapshot: GitGraphSnapshot, options: LayoutOptions =
       return [{ child: commit, parent, kind }]
     }),
   )
-  const columnByLane = packColumns(laidOut, snapshot.head.commitID)
+  const columnByLane = packColumns(laidOut)
   const packed = laidOut.map((commit) => {
     const lane = columnByLane.get(commit.lane) ?? 0
     const cardLeft = paddingX + lane * lanePitch
@@ -440,8 +446,8 @@ function shiftLanes(commits: readonly LaidOutCommit[], paddingX: number, cardWid
   })
 }
 
-/** Sit overlapping threads in consecutive columns to the right of HEAD. */
-function packColumns(commits: readonly LaidOutCommit[], headID?: GitCommitID) {
+/** Sit overlapping threads in consecutive columns to the right of the original line. */
+function packColumns(commits: readonly LaidOutCommit[]) {
   const spans = new Map<number, { lane: number; y0: number; y1: number }>()
   for (const commit of commits) {
     const y0 = commit.cardTop
@@ -455,16 +461,11 @@ function packColumns(commits: readonly LaidOutCommit[], headID?: GitCommitID) {
     prev.y1 = Math.max(prev.y1, y1)
   }
 
-  const headLane = headID ? commits.find((commit) => commit.id === headID)?.lane : undefined
   const assigned: { y0: number; y1: number; col: number }[] = []
   const columnByLane = new Map<number, number>()
-  const ordered = [...spans.values()].sort((a, b) => {
-    if (a.lane === headLane) return -1
-    if (b.lane === headLane) return 1
-    return a.lane - b.lane
-  })
+  const ordered = [...spans.values()].sort((a, b) => a.lane - b.lane)
   for (const span of ordered) {
-    if (span.lane === headLane) {
+    if (span.lane === 0) {
       assigned.push({ y0: span.y0, y1: span.y1, col: 0 })
       columnByLane.set(span.lane, 0)
       continue
@@ -472,7 +473,7 @@ function packColumns(commits: readonly LaidOutCommit[], headID?: GitCommitID) {
     const used = new Set(
       assigned.filter((other) => other.y0 < span.y1 + 12 && span.y0 < other.y1 + 12).map((other) => other.col),
     )
-    if (headLane != null) used.add(0)
+    used.add(0)
     let col = 0
     while (used.has(col)) col++
     assigned.push({ y0: span.y0, y1: span.y1, col })
@@ -547,6 +548,7 @@ function makeEdge(
     points,
     lane: item.child.lane,
     colorLane: item.kind === "merge" ? item.parent.lane : item.child.lane,
+    colorBranch: item.kind === "merge" ? item.parent.owningBranch : item.child.owningBranch,
     selectable: item.kind !== "continue",
   }
 }
@@ -813,23 +815,39 @@ function orderCommits(commits: readonly GitGraphCommit[]) {
   return ordered.concat(commits.filter((commit) => !seen.has(commit.id)).sort(compareNewestFirst))
 }
 
-function allocateLanes(commits: readonly GitGraphCommit[], headID?: GitCommitID) {
+function allocateLanes(commits: readonly GitGraphCommit[], refs: readonly GitGraphRef[], headID?: GitCommitID) {
   const laneByCommit = new Map<GitCommitID, number>()
-  const reserved = new Map<GitCommitID, number>()
+  const byId = new Map(commits.map((commit) => [commit.id, commit]))
   let nextLane = 0
-  if (headID) {
-    reserved.set(headID, 0)
+
+  const paint = (tipID: GitCommitID, lane: number) => {
+    let id: GitCommitID | undefined = tipID
+    while (id) {
+      if (laneByCommit.has(id)) return
+      laneByCommit.set(id, lane)
+      id = byId.get(id)?.parents[0]
+    }
+  }
+
+  const home = homeTipID(commits, refs, headID)
+  if (home) {
+    paint(home, 0)
     nextLane = 1
   }
 
+  const tips = localTips(refs).sort((a, b) => a.name.localeCompare(b.name))
+  for (const tip of tips) {
+    if (laneByCommit.has(tip.commitID)) continue
+    paint(tip.commitID, nextLane++)
+  }
+
+  const reserved = new Map<GitCommitID, number>()
   for (const commit of commits) {
+    if (laneByCommit.has(commit.id)) continue
     const lane = reserved.get(commit.id) ?? nextLane++
     laneByCommit.set(commit.id, lane)
-
     const [first, ...rest] = commit.parents
-    if (first && !reserved.has(first) && !laneByCommit.has(first)) {
-      reserved.set(first, lane)
-    }
+    if (first && !reserved.has(first) && !laneByCommit.has(first)) reserved.set(first, lane)
     for (const parent of rest) {
       if (reserved.has(parent) || laneByCommit.has(parent)) continue
       reserved.set(parent, nextLane++)
@@ -837,6 +855,58 @@ function allocateLanes(commits: readonly GitGraphCommit[], headID?: GitCommitID)
   }
 
   return laneByCommit
+}
+
+function owningBranchByCommit(commits: readonly GitGraphCommit[], refs: readonly GitGraphRef[], headID?: GitCommitID) {
+  const owner = new Map<GitCommitID, string>()
+  const byId = new Map(commits.map((commit) => [commit.id, commit]))
+  const paint = (tipID: GitCommitID, name: string) => {
+    let id: GitCommitID | undefined = tipID
+    while (id) {
+      if (owner.has(id)) return
+      owner.set(id, name)
+      id = byId.get(id)?.parents[0]
+    }
+  }
+
+  const tips = localTips(refs)
+  const home = homeTipID(commits, refs, headID)
+  const homeName = tips.find((tip) => tip.commitID === home)?.name
+  if (home && homeName) paint(home, homeName)
+  for (const tip of [...tips].sort((a, b) => a.name.localeCompare(b.name))) {
+    paint(tip.commitID, tip.name)
+  }
+  return owner
+}
+
+function localTips(refs: readonly GitGraphRef[]) {
+  const tips: { name: string; commitID: GitCommitID }[] = []
+  const seen = new Set<string>()
+  for (const ref of refs) {
+    if (ref.kind !== "local" || seen.has(ref.name)) continue
+    seen.add(ref.name)
+    tips.push({ name: ref.name, commitID: ref.commitID })
+  }
+  return tips
+}
+
+function homeTipID(commits: readonly GitGraphCommit[], refs: readonly GitGraphRef[], headID?: GitCommitID) {
+  const preferred = localTips(refs).find((tip) => /^(main|master|trunk)$/i.test(tip.name))
+  if (preferred) return preferred.commitID
+  const byId = new Map(commits.map((commit) => [commit.id, commit]))
+  const named = new Map<GitCommitID, GitCommitID>()
+  for (const tip of localTips(refs)) named.set(tip.commitID, tip.commitID)
+  if (headID) {
+    let id = byId.get(headID)?.parents[0]
+    const seen = new Set<GitCommitID>()
+    while (id && !seen.has(id)) {
+      seen.add(id)
+      const home = named.get(id)
+      if (home) return home
+      id = byId.get(id)?.parents[0]
+    }
+  }
+  return headID ?? localTips(refs)[0]?.commitID
 }
 
 function labelsByCommitID(refs: readonly GitGraphRef[]) {

@@ -4,6 +4,16 @@ import { layoutGraph } from "../layout"
 import { createGraphInteraction } from "../interaction"
 import { drawGraph, hitTestCommit, hitTestLocalLabel, screenToWorld } from "../render/canvas"
 import { canvasColors } from "../compat/theme"
+import {
+  assignBranchHues,
+  cssFromHues,
+  loadBranchHues,
+  pickerHex,
+  rememberPickedColor,
+  rememberRename,
+  saveBranchHues,
+  type BranchColorMap,
+} from "../render/branch-color"
 import "../compat/git-graph.css"
 import { PathPopup } from "../details/path-popup"
 import { CommitTooltip, type GitActionRequest, type GitGraphActions } from "../details/commit-tooltip"
@@ -65,8 +75,10 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   const [renameBusy, setRenameBusy] = createSignal(false)
   const [renameError, setRenameError] = createSignal("")
   const [showLoading, setShowLoading] = createSignal(false)
+  const [branchHues, setBranchHues] = createSignal<BranchColorMap>({})
   let canvas: HTMLCanvasElement | undefined
   let host: HTMLDivElement | undefined
+  let colorInput: HTMLInputElement | undefined
   let dragging = false
   let moved = false
   let lastX = 0
@@ -87,6 +99,15 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     if (current.status.kind === "ready") return ""
     if (current.status.kind === "invalid" && current.worktree && props.actions?.init) return ""
     return statusMessage(copy(), current.status.kind, "message" in current.status ? current.status.message : undefined)
+  })
+
+  createEffect(() => {
+    const current = snapshot()
+    if (!current?.worktree || current.status.kind !== "ready") return
+    const next = assignBranchHues(localBranchNames(current), loadBranchHues(current.worktree))
+    saveBranchHues(current.worktree, next)
+    if (JSON.stringify(branchHues()) === JSON.stringify(next)) return
+    setBranchHues(next)
   })
 
   createEffect(() => {
@@ -168,6 +189,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       detached: current.head.detached,
       light: scheme === "light",
       colors,
+      branchColors: cssFromHues(branchHues(), scheme === "light"),
       dpr,
     })
   }
@@ -243,6 +265,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     interaction.hoveringLabel()
     selectedLabel()
     mergeIDs()
+    branchHues()
     props.colorScheme
     schedulePaint()
   })
@@ -269,12 +292,21 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
           setConflictError("")
           setChromeError("")
         }
+        if (result.ok) await refreshAfterAction()
         return result
       },
       init: inner.init,
       resolve: inner.resolve,
     }
   })
+
+  const refreshAfterAction = async () => {
+    const next = await props.source.refresh()
+    const id = interaction.selectedID()
+    if (id && next.commits.some((commit) => commit.id === id)) return
+    interaction.setSelectedID(next.head.commitID)
+    props.onSelect?.(next.head.commitID)
+  }
 
   const showPushAll = createMemo(() => {
     const current = snapshot()
@@ -297,17 +329,17 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
   const backupThenRetry = async () => {
     const pending = overwrite()?.pending
-    const inner = props.actions
-    if (!pending || !inner || overwriteBusy()) return
+    const actions = hostActions()
+    if (!pending || !actions || overwriteBusy()) return
     setOverwriteBusy(true)
     setOverwriteError("")
-    const saved = await inner.run({ kind: "commit", name: overwriteName() })
+    const saved = await actions.run({ kind: "commit", name: overwriteName() })
     if (!saved.ok) {
       setOverwriteBusy(false)
       setOverwriteError(saved.message || copy().error)
       return
     }
-    const again = await inner.run(pending)
+    const again = await actions.run(pending)
     setOverwriteBusy(false)
     if (!again.ok) {
       if (again.overwrite) {
@@ -324,11 +356,11 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
 
   const discardThenRetry = async () => {
     const current = overwrite()
-    const inner = props.actions
-    if (!current || !inner || overwriteBusy()) return
+    const actions = hostActions()
+    if (!current || !actions || overwriteBusy()) return
     setOverwriteBusy(true)
     setOverwriteError("")
-    const result = await inner.run({ ...current.pending, force: true, paths: current.files })
+    const result = await actions.run({ ...current.pending, force: true, paths: current.files })
     setOverwriteBusy(false)
     if (!result.ok) {
       setOverwriteError(result.message || copy().error)
@@ -422,6 +454,24 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     setRenameError("")
   }
 
+  const applyBranchColor = (name: string, hex: string) => {
+    const worktree = snapshot()?.worktree
+    if (!worktree) return
+    const next = rememberPickedColor(loadBranchHues(worktree), name, hex)
+    saveBranchHues(worktree, next)
+    setBranchHues(next)
+  }
+
+  const openColorPicker = () => {
+    const node = colorInput
+    if (!node) return
+    if (typeof node.showPicker === "function") {
+      node.showPicker()
+      return
+    }
+    node.click()
+  }
+
   const runRename = async () => {
     const from = selectedLabel()
     if (!hostActions() || !from || renameBusy() || !renameTo().trim()) return
@@ -430,6 +480,13 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     const result = await hostActions()!.run({ kind: "rename", target: from, name: renameTo() })
     setRenameBusy(false)
     if (result.ok) {
+      const worktree = snapshot()?.worktree
+      const nextName = renameTo().trim()
+      if (worktree && nextName) {
+        const next = rememberRename(loadBranchHues(worktree), from, nextName)
+        saveBranchHues(worktree, next)
+        setBranchHues(next)
+      }
       closeRename()
       return
     }
@@ -496,7 +553,6 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       target: extras?.target,
       cloud: extras?.cloud === true,
     })
-    if (result.ok) await props.source.refresh()
     setChromeBusy(false)
     setSavingBackup(false)
     if (result.ok) return
@@ -510,7 +566,6 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
     setPushingCloud(true)
     setChromeError("")
     const result = await hostActions()!.run({ kind: "publish" })
-    if (result.ok) await props.source.refresh()
     setChromeBusy(false)
     setPushingCloud(false)
     if (result.ok) return
@@ -622,7 +677,11 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
   }
 
   return (
-    <div class={`git-graph-root relative h-full min-h-0 w-full ${props.class ?? ""}`} data-component="git-graph-panel">
+    <div
+      class={`git-graph-root relative h-full min-h-0 w-full ${props.class ?? ""}`}
+      data-component="git-graph-panel"
+      data-color-scheme={props.colorScheme ?? "dark"}
+    >
       <div
         ref={host}
         class="git-graph-canvas-host"
@@ -680,22 +739,24 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
         >
-          <div class="git-graph-float-group">
-            <button
-              class="git-graph-button"
-              type="button"
-              disabled={chromeBusy() || !hostActions()}
-              onClick={() => {
-                setPickingBackupPlace(true)
-                setNamingBackup(false)
-                setBackupPlace(undefined)
-                setBackupName("")
-                setChromeError("")
-              }}
-            >
-              {copy().createBackup}
-            </button>
-          </div>
+          <button
+            class="git-graph-button git-graph-icon-button"
+            type="button"
+            disabled={chromeBusy() || !hostActions()}
+            title={copy().createBackup}
+            aria-label={copy().createBackup}
+            onClick={() => {
+              setPickingBackupPlace(true)
+              setNamingBackup(false)
+              setBackupPlace(undefined)
+              setBackupName("")
+              setChromeError("")
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
           <div class="git-graph-float-group">
             <select
               class="git-graph-button"
@@ -718,30 +779,29 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               )}
             </Show>
           </div>
-          <div class="git-graph-float-end">
-            <button
-              class="git-graph-button git-graph-icon-button"
-              type="button"
-              disabled={!snapshot()?.commits.length}
-              title={copy().searchBackups}
-              onClick={() => {
-                if (searching()) {
-                  closeSearch()
-                  return
-                }
-                setSearching(true)
-                setSearchQuery("")
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
-                <path d="M16 16l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-              </svg>
-            </button>
-            <button class="git-graph-button" type="button" disabled={!snapshot()?.head.commitID} onClick={goToHead}>
-              {copy().goToHead}
-            </button>
-          </div>
+          <button class="git-graph-button" type="button" disabled={!snapshot()?.head.commitID} onClick={goToHead}>
+            {copy().goToHead}
+          </button>
+          <button
+            class="git-graph-button git-graph-icon-button"
+            type="button"
+            disabled={!snapshot()?.commits.length}
+            title={copy().searchBackups}
+            aria-label={copy().searchBackups}
+            onClick={() => {
+              if (searching()) {
+                closeSearch()
+                return
+              }
+              setSearching(true)
+              setSearchQuery("")
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
+              <path d="M16 16l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
         </div>
       </Show>
 
@@ -751,12 +811,13 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
         >
-          <input
-            class="git-graph-button git-graph-name-input w-full"
-            value={searchQuery()}
-            placeholder={copy().searchPlaceholder}
-            autofocus
-            onInput={(event) => setSearchQuery(event.currentTarget.value)}
+            <input
+              class="git-graph-search-input"
+              value={searchQuery()}
+              placeholder={copy().searchPlaceholder}
+              autofocus
+              ref={highlightNameField}
+              onInput={(event) => setSearchQuery(event.currentTarget.value)}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 closeSearch()
@@ -830,6 +891,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               placeholder={copy().backupName}
               disabled={chromeBusy()}
               autofocus
+              ref={highlightNameField}
               onInput={(event) => setBackupName(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -929,6 +991,19 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
                   <button class="git-graph-button" type="button" disabled={!hostActions()} onClick={() => setRenaming(true)}>
                     {copy().renameBranch}
                   </button>
+                  <button class="git-graph-button" type="button" onClick={openColorPicker}>
+                    {copy().changeColor}
+                  </button>
+                  <input
+                    ref={(node) => {
+                      colorInput = node
+                    }}
+                    class="git-graph-color-input"
+                    type="color"
+                    value={pickerHex(branchHues()[name()], props.colorScheme === "light")}
+                    aria-label={copy().changeColor}
+                    onInput={(event) => applyBranchColor(name(), event.currentTarget.value)}
+                  />
                 </div>
               }
             >
@@ -938,6 +1013,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
                 placeholder={copy().threadName}
                 disabled={renameBusy()}
                 autofocus
+                ref={highlightNameField}
                 onInput={(event) => setRenameTo(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
@@ -998,6 +1074,8 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               value={mergeName()}
               placeholder={copy().mergeName}
               disabled={mergeBusy()}
+              autofocus
+              ref={highlightNameField}
               onInput={(event) => setMergeName(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return
@@ -1033,11 +1111,12 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               <div>{prompt().body}</div>
               <div class="mt-1.5">{prompt().question}</div>
               <input
-                class="git-graph-button mt-3 w-full text-left"
+                class="git-graph-button git-graph-name-input mt-3 w-full"
                 value={overwriteName()}
                 placeholder={copy().backupName}
                 disabled={overwriteBusy()}
                 autofocus
+                ref={highlightNameField}
                 onInput={(event) => setOverwriteName(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
@@ -1143,6 +1222,7 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
               placeholder={copy().firstThreadName}
               disabled={initBusy()}
               autofocus
+              ref={highlightNameField}
               onInput={(event) => setInitName(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -1242,4 +1322,11 @@ export function GitGraphPanel(props: GitGraphPanelProps) {
       </Show>
     </div>
   )
+}
+
+function highlightNameField(el: HTMLInputElement) {
+  queueMicrotask(() => {
+    el.focus()
+    el.select()
+  })
 }

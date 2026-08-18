@@ -44,6 +44,7 @@ export const dict = {
   "desktop.menu.minimize": "最小化",
   "desktop.menu.maximize": "最大化",
   "desktop.menu.documentation": "OpenCode 文档",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "支持论坛",
   "desktop.menu.shareFeedback": "提供反馈",
   "desktop.menu.reportBug": "报告错误",
@@ -119,6 +120,9 @@ export const dict = {
   "command.category.workspace": "工作区",
   "command.category.settings": "设置",
   "command.logs.export": "导出日志",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "theme.scheme.system": "系统",
   "theme.scheme.light": "浅色",

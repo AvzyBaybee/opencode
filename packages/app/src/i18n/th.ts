@@ -40,6 +40,7 @@ export const dict = {
   "desktop.menu.minimize": "ย่อหน้าต่าง",
   "desktop.menu.maximize": "ขยายหน้าต่าง",
   "desktop.menu.documentation": "เอกสาร OpenCode",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "ฟอรัมสนับสนุน",
   "desktop.menu.shareFeedback": "ส่งข้อคิดเห็น",
   "desktop.menu.reportBug": "รายงานข้อบกพร่อง",
@@ -115,6 +116,9 @@ export const dict = {
   "command.category.workspace": "พื้นที่ทำงาน",
   "command.category.settings": "การตั้งค่า",
   "command.logs.export": "ส่งออกบันทึก",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "theme.scheme.system": "ระบบ",
   "theme.scheme.light": "สว่าง",

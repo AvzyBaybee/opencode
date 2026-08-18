@@ -12,8 +12,8 @@ import {
 
 const NAV = [
   { id: AVA_CONTEXT_TAB, key: "ava.sidePanel.context" as const, files: false },
-  { id: AVA_PROJECT_FOLDER_TAB, key: "ava.sidePanel.files" as const, files: true },
   { id: AVA_BACKUP_TAB, key: "ava.sidePanel.backup" as const, files: false },
+  { id: AVA_PROJECT_FOLDER_TAB, key: "ava.sidePanel.files" as const, files: true },
   { id: AVA_AGENTS_TAB, key: "ava.sidePanel.agents" as const, files: false },
   { id: AVA_INSTRUCTIONS_TAB, key: "ava.sidePanel.instructions" as const, files: false },
 ]

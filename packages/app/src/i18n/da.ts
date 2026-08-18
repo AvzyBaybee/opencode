@@ -1170,6 +1170,7 @@ export const dict = {
   "desktop.menu.minimize": "Minimer",
   "desktop.menu.maximize": "Maksimer",
   "desktop.menu.documentation": "OpenCode-dokumentation",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "Supportforum",
   "desktop.menu.shareFeedback": "Giv feedback",
   "desktop.menu.reportBug": "Rapportér en fejl",
@@ -1229,6 +1230,9 @@ export const dict = {
   "desktop.picker.error.sizeLimit": "De valgte vedhæftede filer overskrider grænsen på {{limit}} MB",
 
   "command.logs.export": "Eksportér logfiler",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "help.tabs.toast.ariaLabel": "Introduktion til faner. Organiser dit arbejde og dine aktive sessioner med faner",
   "help.tabs.toast.dismiss": "Luk oplysninger om faner",

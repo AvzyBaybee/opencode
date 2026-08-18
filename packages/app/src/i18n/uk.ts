@@ -40,6 +40,7 @@ export const dict = {
   "desktop.menu.minimize": "Згорнути",
   "desktop.menu.maximize": "Розгорнути",
   "desktop.menu.documentation": "Документація OpenCode",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "Форум підтримки",
   "desktop.menu.shareFeedback": "Надіслати відгук",
   "desktop.menu.reportBug": "Повідомити про помилку",
@@ -117,6 +118,9 @@ export const dict = {
   "command.category.workspace": "Робоча область",
   "command.category.settings": "Налаштування",
   "command.logs.export": "Експортувати журнали",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "theme.scheme.system": "Системна",
   "theme.scheme.light": "Світла",

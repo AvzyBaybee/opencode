@@ -44,6 +44,7 @@ export const dict = {
   "desktop.menu.minimize": "Simge durumuna küçült",
   "desktop.menu.maximize": "Ekranı kapla",
   "desktop.menu.documentation": "OpenCode belgeleri",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "Destek forumu",
   "desktop.menu.shareFeedback": "Geri bildirim paylaş",
   "desktop.menu.reportBug": "Hata bildir",
@@ -121,6 +122,9 @@ export const dict = {
   "command.category.workspace": "Çalışma Alanı",
   "command.category.settings": "Ayarlar",
   "command.logs.export": "Günlükleri dışa aktar",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "theme.scheme.system": "Sistem",
   "theme.scheme.light": "Açık",

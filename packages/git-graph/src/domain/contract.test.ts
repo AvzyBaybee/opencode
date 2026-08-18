@@ -178,6 +178,51 @@ describe("layout", () => {
     )
   })
 
+  test("puts a new branch's unique backups to the right of the original line", () => {
+    const person = {
+      authorName: "Ava",
+      authorEmail: "ava@example.com",
+      committerName: "Ava",
+      committerEmail: "ava@example.com",
+    }
+    const layout = layoutGraph({
+      ...fixtureSnapshot("linear"),
+      commits: [
+        {
+          id: "b",
+          parents: ["a"],
+          subject: "work on Test-branch",
+          authorAt: 2000,
+          committerAt: 2000,
+          ...person,
+        },
+        {
+          id: "a",
+          parents: [],
+          subject: "Multiple changes.",
+          authorAt: 1000,
+          committerAt: 1000,
+          ...person,
+        },
+      ],
+      refs: [
+        { name: "main", kind: "local", commitID: "a" },
+        { name: "Test-branch", kind: "local", commitID: "b" },
+        { name: "HEAD", kind: "head", commitID: "b" },
+      ],
+      head: { commitID: "b", branch: "Test-branch", detached: false },
+    })
+    const parent = layout.commits.find((commit) => commit.id === "a")!
+    const child = layout.commits.find((commit) => commit.id === "b")!
+    expect(parent.owningBranch).toBe("main")
+    expect(child.owningBranch).toBe("Test-branch")
+    expect(layout.edges.some((edge) => edge.kind === "fork" && edge.colorBranch === "Test-branch")).toBe(true)
+    expect(parent.lane).toBe(0)
+    expect(child.lane).toBeGreaterThan(0)
+    expect(child.cardLeft).toBeGreaterThan(parent.cardLeft)
+    expect(layout.edges.some((edge) => edge.kind === "fork" && edge.from === "b" && edge.to === "a")).toBe(true)
+  })
+
   test("truncates long backup names to one line on a standard card", () => {
     const layout = layoutGraph({
       ...fixtureSnapshot("linear"),

@@ -1,4 +1,4 @@
-/** Stable, well-spaced lane colors. Golden-angle hues stay far apart as lanes are added. */
+/** Stable, well-spaced fallback hues when a stem has no named branch. */
 export function colorForLane(lane: number, light = false) {
   const hue = (lane * 137.508) % 360
   const saturation = light ? 72 : 64

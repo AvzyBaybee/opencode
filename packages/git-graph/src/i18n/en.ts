@@ -49,6 +49,7 @@ export type GitGraphCopy = {
   readonly createRepository: string
   readonly firstThreadName: string
   readonly renameBranch: string
+  readonly changeColor: string
   readonly pushAllToCloud: string
   readonly pushingCloud: string
   readonly searchBackups: string
@@ -106,10 +107,11 @@ export const en: GitGraphCopy = {
   createRepository: "Create a repository",
   firstThreadName: "Name your repository",
   renameBranch: "Rename",
+  changeColor: "Change color",
   pushAllToCloud: "Push all backups to cloud",
   pushingCloud: "Pushing backups to cloud…",
   searchBackups: "Search backups",
-  searchPlaceholder: "Backup name",
+  searchPlaceholder: "Search for a backup...",
 }
 
 export function statusMessage(copy: GitGraphCopy, kind: string, fallback?: string) {

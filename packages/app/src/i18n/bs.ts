@@ -40,6 +40,7 @@ export const dict = {
   "desktop.menu.minimize": "Minimiziraj",
   "desktop.menu.maximize": "Maksimiziraj",
   "desktop.menu.documentation": "Dokumentacija za OpenCode",
+  "desktop.menu.copyAgentInstructionSystem": "Copy Agent Instruction System Documentation",
   "desktop.menu.supportForum": "Forum za podršku",
   "desktop.menu.shareFeedback": "Pošalji povratne informacije",
   "desktop.menu.reportBug": "Prijavi grešku",
@@ -117,6 +118,9 @@ export const dict = {
   "command.category.workspace": "Radni prostor",
   "command.category.settings": "Postavke",
   "command.logs.export": "Izvezi zapisnike",
+  "command.docs.copyAgentInstructionSystem": "Copy agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.success": "Copied agent instruction system documentation",
+  "ava.docs.copyAgentInstructionSystem.failed": "Could not copy the documentation to the clipboard",
 
   "theme.scheme.system": "Sistem",
   "theme.scheme.light": "Svijetlo",

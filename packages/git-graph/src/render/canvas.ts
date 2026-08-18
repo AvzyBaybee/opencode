@@ -29,10 +29,10 @@ export type ThemeColors = {
 
 export const DEFAULT_THEME: ThemeColors = {
   background: "#141414",
-  edge: "#4f7cff",
-  node: "#4f7cff",
-  nodeSelected: "#8eb0ff",
-  nodeHead: "#4f7cff",
+  edge: "#9a9a9a",
+  node: "#9a9a9a",
+  nodeSelected: "#e8e8e8",
+  nodeHead: "#9a9a9a",
   label: "#e8e8e8",
   labelMuted: "#9a9a9a",
   pillFill: "#2a2a2a",
@@ -40,7 +40,7 @@ export const DEFAULT_THEME: ThemeColors = {
   pillLocal: "#6b8cff",
   pillRemote: "#7a7a7a",
   pillTag: "#c4a35a",
-  focus: "#6b8cff",
+  focus: "#e8e8e8",
   cardFill: "#2c2c2c",
   cardBorder: "#5a5a5a",
   font: "Inter, ui-sans-serif, system-ui, sans-serif",
@@ -85,6 +85,7 @@ export function drawGraph(input: {
   detached?: boolean
   light?: boolean
   colors?: ThemeColors
+  branchColors?: Readonly<Record<string, string>>
   dpr?: number
 }) {
   const colors = input.colors ?? DEFAULT_THEME
@@ -102,13 +103,16 @@ export function drawGraph(input: {
   const view = visibleBounds(input.camera, input.width, input.height)
   const zoom = input.camera.zoom
   const light = Boolean(input.light)
+  const branchColors = input.branchColors ?? {}
+  const stemColor = (branch: string | undefined, lane: number) =>
+    (branch && branchColors[branch]) || colorForLane(lane, light)
   const stems = { verticals: input.layout.verticals, horizontals: input.layout.horizontals }
   const activeKey = input.hoveringEdgeKey ?? input.selectedEdgeKey
   const visibleCommits = input.layout.commits.filter((commit) => cardVisible(commit, view))
   for (const edge of input.layout.edges) {
     if (!polylineVisible(edge.points, view)) continue
     if (edge.key === activeKey) continue
-    ctx.strokeStyle = colorForLane(edge.colorLane, light)
+    ctx.strokeStyle = stemColor(edge.colorBranch, edge.colorLane)
     ctx.lineWidth = 2 / zoom
     ctx.lineJoin = "round"
     ctx.lineCap = "round"
@@ -138,13 +142,22 @@ export function drawGraph(input: {
       Boolean(input.detached && input.headID === commit.id),
       highlighted.has(commit.id),
       zoom,
-      colorForLane(commit.lane, light),
+      stemColor(commit.owningBranch, commit.lane),
     )
   }
 
   for (const commit of visibleCommits) {
     if (commit.labels.length === 0) continue
-    drawLabels(ctx, commit, colors, colorForLane(commit.lane, light), zoom, input.hoveringLabel, input.selectedLabel)
+    drawLabels(
+      ctx,
+      commit,
+      colors,
+      stemColor(commit.owningBranch, commit.lane),
+      branchColors,
+      zoom,
+      input.hoveringLabel,
+      input.selectedLabel,
+    )
   }
 
   ctx.restore()
@@ -272,7 +285,7 @@ function drawCommit(
   detachedHere: boolean,
   highlighted: boolean,
   zoom: number,
-  laneColor: string,
+  branchColor: string,
 ) {
   ctx.save()
   roundRect(ctx, commit.cardLeft, commit.cardTop, commit.cardWidth, commit.cardHeight, 10)
@@ -285,8 +298,8 @@ function drawCommit(
     ctx.fillStyle = colors.cardFill
     ctx.fill()
   }
-  ctx.strokeStyle = selected || highlighted ? colors.focus : hovering ? colors.nodeSelected : isHead ? laneColor : colors.cardBorder
-  ctx.lineWidth = (selected || highlighted ? 2.4 : hovering || isHead ? 2.4 : 1) / zoom
+  ctx.strokeStyle = selected || highlighted ? colors.focus : hovering ? colors.nodeSelected : isHead ? lightenStroke(branchColor) : branchColor
+  ctx.lineWidth = (selected || highlighted ? 2.4 : isHead ? 3.1 : hovering ? 2 : 0.9) / zoom
   ctx.stroke()
 
   const fontSize = 12
@@ -303,10 +316,23 @@ function drawCommit(
   ctx.font = `${fontSize}px ${colors.font}`
   ctx.fillStyle = colors.label
   ctx.fillText(commit.lines[0] ?? "", commit.x, commit.y)
-  drawBackupPlaceMark(ctx, commit, colors.focus, colors.pillTag)
+  drawBackupPlaceMark(ctx, commit)
   ctx.textAlign = "left"
   ctx.textBaseline = "top"
   ctx.restore()
+}
+
+function lightenStroke(color: string) {
+  const hsl = /^hsl\(\s*([0-9.]+)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%\s*\)$/i.exec(color)
+  if (hsl) return `hsl(${hsl[1]} ${hsl[2]}% ${Math.min(86, Number(hsl[3]) + 16)}%)`
+  const hex = /^#([0-9a-f]{6})$/i.exec(color)
+  if (!hex) return color
+  const value = hex[1]!
+  const mix = (channel: string) => Math.round(Number.parseInt(channel, 16) + (255 - Number.parseInt(channel, 16)) * 0.28)
+  const r = mix(value.slice(0, 2)).toString(16).padStart(2, "0")
+  const g = mix(value.slice(2, 4)).toString(16).padStart(2, "0")
+  const b = mix(value.slice(4, 6)).toString(16).padStart(2, "0")
+  return `#${r}${g}${b}`
 }
 
 function drawLabels(
@@ -314,6 +340,7 @@ function drawLabels(
   commit: LaidOutCommit,
   colors: ThemeColors,
   laneColor: string,
+  branchColors: Readonly<Record<string, string>>,
   zoom: number,
   hovering?: string,
   selected?: string,
@@ -321,7 +348,7 @@ function drawLabels(
   const pillH = 16
   for (const box of labelBoxes(commit)) {
     roundRect(ctx, box.x, box.y, box.width, pillH, 6)
-    ctx.fillStyle = pillFill(box.label, colors, laneColor)
+    ctx.fillStyle = pillFill(box.label, colors, laneColor, branchColors)
     ctx.fill()
     if (box.label.kind === "local" && (box.label.name === hovering || box.label.name === selected)) {
       ctx.strokeStyle = colors.focus
@@ -353,8 +380,13 @@ function labelBoxes(commit: LaidOutCommit) {
   })
 }
 
-function pillFill(label: CommitLabel, colors: ThemeColors, laneColor: string) {
-  if (label.kind === "local") return laneColor
+function pillFill(
+  label: CommitLabel,
+  colors: ThemeColors,
+  laneColor: string,
+  branchColors: Readonly<Record<string, string>>,
+) {
+  if (label.kind === "local") return branchColors[label.name] ?? laneColor
   if (label.kind === "tag") return colors.pillTag
   return colors.pillFill
 }
