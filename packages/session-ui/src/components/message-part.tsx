@@ -288,8 +288,14 @@ function messageBoxSize(el: HTMLElement | undefined) {
   }
 }
 
+function editorLineMin(el: HTMLTextAreaElement) {
+  const parsed = Number.parseFloat(getComputedStyle(el).lineHeight)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 1
+}
+
 function resizeMessageEditor(el: HTMLTextAreaElement, min: number) {
-  el.style.height = "auto"
+  el.style.height = "0px"
   el.style.height = `${Math.max(el.scrollHeight, min)}px`
 }
 
@@ -302,10 +308,11 @@ function MessageInlineEditor(props: {
   onConfirm: () => void
 }) {
   let editor: HTMLTextAreaElement | undefined
-  const fit = (el: HTMLTextAreaElement) => resizeMessageEditor(el, props.minHeight)
+  let sizedToContent = false
+  const fit = (el: HTMLTextAreaElement, min?: number) => resizeMessageEditor(el, min ?? editorLineMin(el))
   const activate = () => {
     if (!editor) return
-    fit(editor)
+    if (!sizedToContent) fit(editor, Math.max(props.minHeight, editorLineMin(editor)))
     editor.focus()
     const end = editor.value.length
     editor.setSelectionRange(end, end)
@@ -321,12 +328,12 @@ function MessageInlineEditor(props: {
       disabled={props.disabled}
       rows={1}
       autofocus
-      style={props.minHeight ? { "min-height": `${props.minHeight}px` } : undefined}
       ref={(el) => {
         editor = el
         if (el) activate()
       }}
       onInput={(event) => {
+        sizedToContent = true
         fit(event.currentTarget)
         props.onChange(event.currentTarget.value)
       }}
