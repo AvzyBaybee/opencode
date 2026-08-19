@@ -1029,6 +1029,7 @@ export const dict = {
   "ava.agents.form.instructions.search": "Search instructions...",
   "ava.agents.form.instructions.empty": "No matching instructions",
   "ava.agents.form.instructions.none": "No instructions attached",
+  "ava.agents.form.instructions.open": "Open instruction",
   "ava.agents.form.instructions.scope.global": "Global",
   "ava.agents.form.instructions.scope.project": "Project",
   "ava.agents.form.description": "Description",

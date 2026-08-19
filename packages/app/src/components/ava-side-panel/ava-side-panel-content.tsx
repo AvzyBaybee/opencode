@@ -32,10 +32,18 @@ export function AvaSidePanelContent(props: {
           <SessionContextTab />
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_AGENTS_TAB}>
-          <AvaManageAgentsPage pane="agents" sidebarWidth={props.state.sidebarWidth} />
+          <AvaManageAgentsPage
+            pane="agents"
+            active={props.tab === AVA_AGENTS_TAB}
+            sidebarWidth={props.state.sidebarWidth}
+          />
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_INSTRUCTIONS_TAB}>
-          <AvaManageAgentsPage pane="instructions" sidebarWidth={props.state.sidebarWidth} />
+          <AvaManageAgentsPage
+            pane="instructions"
+            active={props.tab === AVA_INSTRUCTIONS_TAB}
+            sidebarWidth={props.state.sidebarWidth}
+          />
         </AvaSidePanelPane>
         <AvaSidePanelPane active={props.tab === AVA_BACKUP_TAB}>
           <Suspense>

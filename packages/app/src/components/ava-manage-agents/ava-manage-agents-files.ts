@@ -169,6 +169,23 @@ export function matchesInstructionPath(item: InstructionDocument, path: string) 
   return normalizePath(fileName(item.path)) === normalizePath(fileName(path))
 }
 
+export function isAgentsLibraryFile(path: string, project: string, config: string) {
+  const file = normalizePath(path)
+  if (!file) return false
+  if (isProjectLibraryFile(file)) return true
+  return libraryRoots(config).some((root) => file === root || file.startsWith(`${root}/`))
+}
+
+function isProjectLibraryFile(file: string) {
+  return PROJECT_LIBRARY_MARKERS.some((marker) => file === marker || file.startsWith(`${marker}/`) || file.includes(`/${marker}/`))
+}
+
+const PROJECT_LIBRARY_MARKERS = [".opencode/instructions", ".opencode/agents", ".opencode/agent"]
+
+function libraryRoots(config: string) {
+  return ["instructions", "agents", "agent"].map((folder) => normalizePath(joinPath(config, folder)))
+}
+
 export function instructionDisplayName(path: string) {
   return displayNameFromSlug(fileName(path).replace(/\.md$/i, ""))
 }

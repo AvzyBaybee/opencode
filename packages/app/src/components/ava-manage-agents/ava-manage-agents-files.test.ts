@@ -5,6 +5,7 @@ import {
   extractedInstructionHeading,
   instructionDisplayName,
   instructionFolderGlob,
+  isAgentsLibraryFile,
   isAgentsMdPath,
   loadInstructions,
   matchesInstructionPath,
@@ -63,6 +64,13 @@ describe("ava manage agents files", () => {
         "C:\\c\\instructions\\builder-instructions.md",
       ),
     ).toBe(true)
+  })
+
+  test("recognizes project and global agent library files", () => {
+    expect(isAgentsLibraryFile(".opencode/instructions/voice.md", "/p", "/c")).toBe(true)
+    expect(isAgentsLibraryFile("/p/.opencode/agents/builder.md", "/p", "/c")).toBe(true)
+    expect(isAgentsLibraryFile("C:\\c\\instructions\\voice.md", "/p", "C:\\c")).toBe(true)
+    expect(isAgentsLibraryFile("src/app.ts", "/p", "/c")).toBe(false)
   })
 
   test("extracts agent bodies into instruction files and clears the agent body", async () => {

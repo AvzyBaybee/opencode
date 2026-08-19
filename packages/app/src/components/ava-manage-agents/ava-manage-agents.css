@@ -397,6 +397,33 @@
   border-bottom: 0;
 }
 
+.ava-agent-instruction-list .ava-agent-chip:hover,
+.ava-agent-instruction-list .ava-agent-chip:focus-within {
+  background: var(--v2-overlay-simple-overlay-hover, color-mix(in srgb, #ffffff 6%, transparent));
+  color: var(--v2-text-text-base, var(--text-base));
+}
+
+.ava-agent-instruction-open {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ava-agent-instruction-open:focus-visible {
+  outline: 1px solid var(--v2-border-border-strong, var(--border-strong-base));
+  outline-offset: 2px;
+}
+
 .ava-agent-instruction-list .ava-agent-picker-empty {
   padding: 10px 8px;
 }

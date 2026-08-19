@@ -53,6 +53,15 @@ function ensureStore() {
   )
 }
 
+export function openAvaSidePanelTab(tab: string) {
+  ensureStore()
+  const known =
+    isAvaFixedTab(tab) || store.browseDirectories.some((directory) => browseFolderTab(directory) === tab)
+  if (!known) return
+  if (isAvaFilesTab(tab)) setStore("lastFiles", tab)
+  setStore("active", tab)
+}
+
 export function createAvaSidePanelTabs(projectDirectory: () => string) {
   ensureStore()
 
@@ -65,9 +74,7 @@ export function createAvaSidePanelTabs(projectDirectory: () => string) {
   })
 
   const setActive = (tab: string) => {
-    if (!tabs().includes(tab)) return
-    if (isAvaFilesTab(tab)) setStore("lastFiles", tab)
-    setStore("active", tab)
+    openAvaSidePanelTab(tab)
   }
 
   const showFiles = () => {

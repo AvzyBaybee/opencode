@@ -24,6 +24,7 @@ export function AvaAgentSettingsForm(props: {
   instructions: InstructionDocument[]
   instructionLabel: (item: InstructionDocument) => string
   onChange: (settings: AgentSettings) => void
+  onOpenInstruction?: (path: string) => void
 }) {
   const language = useLanguage()
   const [addOpen, setAddOpen] = createSignal(false)
@@ -35,6 +36,7 @@ export function AvaAgentSettingsForm(props: {
       const item = docs.find((doc) => matchesInstructionPath(doc, path))
       return {
         path,
+        openPath: item?.path ?? path,
         label: item ? props.instructionLabel(item) : instructionDisplayName(path),
       }
     })
@@ -82,7 +84,14 @@ export function AvaAgentSettingsForm(props: {
           >
             {(item) => (
               <div class="ava-agent-chip">
-                <span>{item.label}</span>
+                <button
+                  type="button"
+                  class="ava-agent-instruction-open"
+                  aria-label={language.t("ava.agents.form.instructions.open")}
+                  onClick={() => props.onOpenInstruction?.(item.openPath)}
+                >
+                  {item.label}
+                </button>
                 <IconButtonV2
                   type="button"
                   size="small"

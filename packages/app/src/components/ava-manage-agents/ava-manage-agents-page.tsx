@@ -20,9 +20,12 @@ import { AvaAgentSettingsForm } from "./ava-agent-settings-form"
 import {
   exclusiveInstructionPaths,
   extractAgentPromptFiles,
+  isAgentsLibraryFile,
   loadAgents,
   loadInstructions,
+  matchesInstructionPath,
 } from "./ava-manage-agents-files"
+import { avaAgentsLive, bumpAvaAgentsLibrary, clearAvaInstructionFocus, openAvaInstruction } from "./ava-manage-agents-live"
 import {
   agentTemplate,
   documentId,
@@ -40,7 +43,7 @@ import "./ava-manage-agents.css"
 
 type Draft = { scope: AgentsScope; value: string }
 
-export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: () => number }) {
+export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean; sidebarWidth?: () => number }) {
   const language = useLanguage()
   const dialog = useDialog()
   const platform = usePlatform()
@@ -100,9 +103,25 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     }
     const raw = (await access.read?.(item.path)) ?? ""
     if (item.kind === "agent") {
+      if (store.documentMode) {
+        if (raw === store.document) {
+          setStore("dirty", false)
+          return
+        }
+        setStore({ document: raw, dirty: false })
+        return
+      }
       const parsed = parseAgentSettings(raw || agentTemplate(item.name))
       parsed.settings.instructionPaths = exclusiveInstructionPaths(parsed.settings.instructionPaths)
+      if (sameAgentDraft(parsed.settings, parsed.body, store.settings, store.body)) {
+        setStore("dirty", false)
+        return
+      }
       setStore({ ...parsed, documentMode: false, document: "", dirty: false })
+      return
+    }
+    if (raw === store.body) {
+      setStore("dirty", false)
       return
     }
     setStore({ body: raw, documentMode: false, document: "", dirty: false })
@@ -147,6 +166,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
       })
     })
     setStore("dirty", false)
+    bumpAvaAgentsLibrary()
   }
 
   const scheduleSave = () => {
@@ -192,6 +212,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
           : joinPath(config(), "instructions", `${slug}.md`)
     await access.write(target, props.pane === "agents" ? agentTemplate(value) : instructionTemplate(value))
     await refetch()
+    bumpAvaAgentsLibrary()
     setStore({
       selected: documentId(props.pane === "agents" ? "agent" : "instruction", scope, target),
       draft: undefined,
@@ -206,6 +227,24 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     }
     const current = [...((await serverSDK().client.global.config.get()).data?.instructions ?? [])]
     await serverSDK().client.global.config.update({ config: { instructions: next(current) } })
+  }
+
+  const live = avaAgentsLive()
+  let reloadTimer: number | undefined
+  const refreshLibrary = async () => {
+    const next = (await refetch()) ?? []
+    if (props.pane === "agents") await refetchInstructions()
+    const item = next.find((entry) => entry.id === store.selected)
+    if (!item) {
+      if (store.selected) setStore("selected", undefined)
+      return
+    }
+    if (store.dirty) return
+    await loadSelected(item)
+  }
+  const scheduleLibraryReload = () => {
+    if (reloadTimer !== undefined) window.clearTimeout(reloadTimer)
+    reloadTimer = window.setTimeout(() => void refreshLibrary(), 200)
   }
 
   createEffect(
@@ -224,6 +263,57 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     ),
   )
 
+  createEffect(
+    on(
+      () => live.revision,
+      () => scheduleLibraryReload(),
+      { defer: true },
+    ),
+  )
+
+  createEffect(
+    on(
+      () => props.active,
+      (active) => {
+        if (active) scheduleLibraryReload()
+      },
+      { defer: true },
+    ),
+  )
+
+  createEffect(() => {
+    if (props.pane !== "instructions") return
+    const path = live.focusPath
+    if (!path) return
+    const match = (docs.latest ?? []).find(
+      (item) => item.kind === "instruction" && matchesInstructionPath(item, path),
+    )
+    if (!match) return
+    void persist()
+    setStore("selected", match.id)
+    clearAvaInstructionFocus()
+  })
+
+  createEffect(() => {
+    const client = sdk()
+    const stop = client.event.listen((event) => {
+      const details = event.details as { type: string; properties?: unknown }
+      if (details.type !== "file.watcher.updated" && details.type !== "filesystem.changed") return
+      const propsEvent =
+        typeof details.properties === "object" && details.properties
+          ? (details.properties as Record<string, unknown>)
+          : undefined
+      const file = typeof propsEvent?.file === "string" ? propsEvent.file : undefined
+      if (!file || file.startsWith(".git/")) return
+      if (!isAgentsLibraryFile(file, project(), config())) return
+      scheduleLibraryReload()
+    })
+    onCleanup(stop)
+  })
+  onCleanup(() => {
+    if (reloadTimer !== undefined) window.clearTimeout(reloadTimer)
+  })
+
   const removeItem = async (item: AgentsDocument) => {
     if (item.sticky || !access.remove) return
     await persist()
@@ -239,6 +329,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
     }
     if (store.selected === item.id) setStore("selected", undefined)
     await refetch()
+    bumpAvaAgentsLibrary()
   }
 
   const askRemove = (item: AgentsDocument) => {
@@ -385,6 +476,10 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
                     settings={store.settings}
                     instructions={instructionDocs.latest ?? []}
                     instructionLabel={stickyName}
+                    onOpenInstruction={(path) => {
+                      void persist()
+                      openAvaInstruction(path)
+                    }}
                     onChange={(settings) => {
                       setStore("settings", settings)
                       scheduleSave()
@@ -417,6 +512,10 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; sidebarWidth?: ()
       />
     </div>
   )
+}
+
+function sameAgentDraft(left: AgentSettings, leftBody: string, right: AgentSettings, rightBody: string) {
+  return leftBody === rightBody && JSON.stringify(left) === JSON.stringify(right)
 }
 
 function growEditor(element: HTMLTextAreaElement) {
@@ -574,6 +673,10 @@ function AgentListRow(props: {
         <div
           class="ava-manage-agents-row"
           data-active={props.selected === props.item.id}
+          ref={(element) => {
+            if (props.selected !== props.item.id) return
+            requestAnimationFrame(() => element.scrollIntoView({ block: "nearest" }))
+          }}
           onClick={props.onSelect}
           onContextMenu={props.onContextMenu}
           onMouseEnter={(event) => {
