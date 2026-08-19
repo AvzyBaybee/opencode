@@ -5,7 +5,7 @@ import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
 import { useLanguage } from "@/context/language"
 import { AvaAgentModelPicker, AvaAgentReasoningPicker } from "./ava-agent-model-picker"
-import { isAgentsMdPath, matchesInstructionPath, instructionDisplayName } from "./ava-manage-agents-files"
+import { isAgentsMdPath, instructionRef, matchesInstructionPath, instructionDisplayName } from "./ava-manage-agents-files"
 import type { InstructionDocument } from "./ava-manage-agents-model"
 import {
   PERMISSION_TOOLS,
@@ -41,13 +41,26 @@ export function AvaAgentSettingsForm(props: {
       }
     })
   })
-  const attachedKeys = createMemo(
-    () => new Set(exclusivePaths().flatMap((path) => [normalizePath(path), fileName(path)])),
-  )
+  const attachedKeys = createMemo(() => {
+    const docs = props.instructions
+    return new Set(
+      exclusivePaths().flatMap((ref) => {
+        const item = docs.find((doc) => matchesInstructionPath(doc, ref))
+        return [
+          normalizePath(ref),
+          fileName(ref),
+          ...(item
+            ? [normalizePath(item.path), item.instructionId, item.configPath ? normalizePath(item.configPath) : undefined]
+            : []),
+        ].flatMap((value) => (value ? [value] : []))
+      }),
+    )
+  })
   const available = createMemo(() => {
     const locked = attachedKeys()
     const needle = addQuery().trim().toLowerCase()
     return props.instructions.filter((item) => {
+      if (item.instructionId && locked.has(item.instructionId)) return false
       if (locked.has(normalizePath(item.path))) return false
       if (item.configPath && locked.has(normalizePath(item.configPath))) return false
       if (locked.has(fileName(item.path))) return false
@@ -128,7 +141,7 @@ export function AvaAgentSettingsForm(props: {
                     class="ava-agent-picker-item"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
-                      patch({ instructionPaths: [...props.settings.instructionPaths, item.path] })
+                      patch({ instructionPaths: [...props.settings.instructionPaths, instructionRef(item)] })
                       setAddOpen(false)
                     }}
                   >

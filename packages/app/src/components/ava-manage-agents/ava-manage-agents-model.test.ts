@@ -2,10 +2,14 @@ import { describe, expect, test } from "bun:test"
 import {
   displayNameFromSlug,
   headingName,
+  createInstructionId,
+  isInstructionId,
   parseAgentFile,
+  parseInstructionFile,
   serializeAgentFile,
   slugifyName,
   uniqueSlug,
+  withInstructionId,
 } from "./ava-manage-agents-model"
 
 describe("ava manage agents model", () => {
@@ -30,5 +34,15 @@ describe("ava manage agents model", () => {
 
   test("reads an instruction title from the first heading", () => {
     expect(headingName("# Testing\n\nRun bun test.\n")).toBe("Testing")
+    expect(headingName("---\nid: inst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n---\n\n# Testing\n\nRun bun test.\n")).toBe(
+      "Testing",
+    )
+  })
+
+  test("wraps an instruction file with a stable id without changing the visible body", () => {
+    const id = createInstructionId()
+    expect(isInstructionId(id)).toBe(true)
+    const raw = withInstructionId("# Voice\n\nBe kind.\n", id)
+    expect(parseInstructionFile(raw)).toEqual({ id, body: "# Voice\n\nBe kind.\n" })
   })
 })

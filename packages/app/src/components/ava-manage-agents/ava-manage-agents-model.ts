@@ -20,6 +20,7 @@ export type InstructionDocument = {
   path: string
   sticky?: boolean
   configPath?: string
+  instructionId?: string
 }
 
 export type AgentsDocument = AgentDocument | InstructionDocument
@@ -65,9 +66,31 @@ export function serializeAgentFile(frontmatter: string, body: string) {
 }
 
 export function headingName(raw: string) {
-  const line = raw.split(/\r?\n/).find((item) => item.startsWith("# "))
+  const line = parseInstructionFile(raw).body.split(/\r?\n/).find((item) => item.startsWith("# "))
   if (!line) return
   return line.slice(2).trim()
+}
+
+export function createInstructionId() {
+  return `inst_${crypto.randomUUID().replaceAll("-", "")}`
+}
+
+export function isInstructionId(value: string) {
+  return /^inst_[0-9a-f]{32}$/i.test(value.trim())
+}
+
+export function parseInstructionFile(raw: string) {
+  const match = raw.match(frontmatterPattern)
+  if (!match) return { body: raw, id: undefined as string | undefined }
+  const found = match[1].split(/\r?\n/).flatMap((line) => {
+    const id = line.match(/^id:\s*(inst_[0-9a-f]{32})\s*$/i)?.[1]
+    return id ? [id.toLowerCase()] : []
+  })[0]
+  return { id: found, body: raw.slice(match[0].length).replace(/^\r?\n/, "") }
+}
+
+export function withInstructionId(body: string, id: string) {
+  return `---\nid: ${id}\n---\n\n${parseInstructionFile(body).body.replace(/^\r?\n/, "")}`
 }
 
 export function agentTemplate(name: string) {
@@ -80,7 +103,7 @@ mode: primary
 }
 
 export function instructionTemplate(name: string) {
-  return `# ${name}\n\n`
+  return withInstructionId(`# ${name}\n\n`, createInstructionId())
 }
 
 export function uniqueSlug(base: string, taken: Set<string>) {

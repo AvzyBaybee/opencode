@@ -51,4 +51,21 @@ describe("agent instruction files", () => {
     })
     expect(prompt).toBe("You are a reviewer.")
   })
+
+  test("resolves a stable instruction id after the file is renamed", async () => {
+    const id = "inst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, ".opencode", "instructions", "renamed.md"),
+          `---\nid: ${id}\n---\n\nStay kind.\n`,
+        )
+      },
+    })
+    const prompt = await loadAttachedInstructionPrompt({
+      options: { instructions: [id] },
+      directory: tmp.path,
+    })
+    expect(prompt).toBe("Stay kind.")
+  })
 })

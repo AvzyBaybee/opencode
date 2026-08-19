@@ -18,21 +18,30 @@ import { AvaFileContextMenu, useAvaFileContextMenu } from "@/components/ava-side
 import { TruncatedCursorTooltip, isTextTruncated } from "@/components/truncated-cursor-tooltip"
 import { AvaAgentSettingsForm } from "./ava-agent-settings-form"
 import {
-  exclusiveInstructionPaths,
   extractAgentPromptFiles,
+  instructionConfigPath,
   isAgentsLibraryFile,
+  libraryRenameTarget,
   loadAgents,
   loadInstructions,
   matchesInstructionPath,
+  preferInstructionIds,
+  renamedLibraryContent,
+  retargetInstructionPath,
+  retargetStoredPath,
+  stampInstructionIds,
 } from "./ava-manage-agents-files"
-import { avaAgentsLive, bumpAvaAgentsLibrary, clearAvaInstructionFocus, openAvaInstruction } from "./ava-manage-agents-live"
+import { avaAgentsLive, bumpAvaAgentsLibrary, clearAvaInstructionFocus, notifyAvaLibraryMove, openAvaInstruction } from "./ava-manage-agents-live"
 import {
   agentTemplate,
+  createInstructionId,
   documentId,
   instructionTemplate,
   joinPath,
+  parseInstructionFile,
   slugifyName,
   uniqueSlug,
+  withInstructionId,
   type AgentsDocument,
   type AgentsPane,
   type AgentsScope,
@@ -59,15 +68,19 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
     documentMode: false,
     document: "",
     dirty: false,
+    instructionId: undefined as string | undefined,
+    rename: undefined as { id: string; value: string } | undefined,
   })
   const access = {
     list: platform.browseListDirectory,
     read: platform.browseReadTextFile,
     write: platform.browseWriteTextFile,
     remove: platform.browseDeletePath,
+    rename: platform.browseRenamePath,
   }
   const menu = useAvaFileContextMenu()
   const canReveal = () => platform.platform === "desktop" && !!platform.revealPath
+  const canRename = () => !!access.write
   const project = () => sdk().directory
   const config = () => sync().data.path.config
   const [docs, { refetch }] = createResource(
@@ -98,7 +111,14 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
 
   const loadSelected = async (item: AgentsDocument | undefined) => {
     if (!item) {
-      setStore({ body: "", settings: emptyAgentSettings(), documentMode: false, document: "", dirty: false })
+      setStore({
+        body: "",
+        settings: emptyAgentSettings(),
+        documentMode: false,
+        document: "",
+        dirty: false,
+        instructionId: undefined,
+      })
       return
     }
     const raw = (await access.read?.(item.path)) ?? ""
@@ -112,19 +132,24 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
         return
       }
       const parsed = parseAgentSettings(raw || agentTemplate(item.name))
-      parsed.settings.instructionPaths = exclusiveInstructionPaths(parsed.settings.instructionPaths)
+      parsed.settings.instructionPaths = preferInstructionIds(
+        parsed.settings.instructionPaths,
+        instructionDocs.latest ?? [],
+      )
       if (sameAgentDraft(parsed.settings, parsed.body, store.settings, store.body)) {
         setStore("dirty", false)
         return
       }
-      setStore({ ...parsed, documentMode: false, document: "", dirty: false })
+      setStore({ ...parsed, documentMode: false, document: "", dirty: false, instructionId: undefined })
       return
     }
-    if (raw === store.body) {
+    const parsed = parseInstructionFile(raw)
+    const instructionId = parsed.id ?? createInstructionId()
+    if (parsed.body === store.body && instructionId === store.instructionId) {
       setStore("dirty", false)
       return
     }
-    setStore({ body: raw, documentMode: false, document: "", dirty: false })
+    setStore({ body: parsed.body, documentMode: false, document: "", dirty: false, instructionId })
   }
 
   createEffect(
@@ -140,7 +165,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
   const agentDocument = async () => {
     const settings = {
       ...store.settings,
-      instructionPaths: exclusiveInstructionPaths(store.settings.instructionPaths),
+      instructionPaths: preferInstructionIds(store.settings.instructionPaths, instructionDocs.latest ?? []),
     }
     return serializeAgentSettings(settings, store.body)
   }
@@ -157,7 +182,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
         ? store.documentMode
           ? store.document
           : await agentDocument()
-        : store.body
+        : withInstructionId(store.body, store.instructionId ?? createInstructionId())
     await access.write(item.path, content).catch((error) => {
       showToast({
         variant: "error",
@@ -219,6 +244,78 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
     })
   }
 
+  const beginRename = (item: AgentsDocument) => {
+    if (item.sticky || !canRename()) return
+    setStore({
+      draft: undefined,
+      selected: item.id,
+      rename: { id: item.id, value: stickyName(item) },
+    })
+  }
+
+  const commitRename = async (item: AgentsDocument, name: string) => {
+    setStore("rename", undefined)
+    const target = libraryRenameTarget(
+      item,
+      name,
+      new Set(allDocs().filter((entry) => entry.scope === item.scope).map((entry) => entry.slug)),
+    )
+    if (!target || target.name === stickyName(item)) return
+    if (!access.write) {
+      showToast({ variant: "error", title: language.t("ava.agents.desktopOnly") })
+      return
+    }
+    await persist()
+    const raw = (await access.read?.(item.path)) ?? ""
+    const content = renamedLibraryContent(item, raw, target.name)
+    if (content !== raw) await access.write(item.path, content)
+    if (target.path !== item.path) {
+      if (!access.rename) {
+        showToast({ variant: "error", title: language.t("ava.agents.desktopOnly") })
+        return
+      }
+      const renamed = await access.rename(item.path, target.path).then(
+        () => true,
+        (error) => {
+          showToast({
+            variant: "error",
+            title: language.t("ava.agents.renameFailed.title"),
+            description: error instanceof Error ? error.message : String(error),
+          })
+          return false
+        },
+      )
+      if (!renamed) return
+      if (item.kind === "instruction") {
+        const agents = await loadAgents({ access, project: project(), config: config() })
+        await Promise.all(
+          agents.map(async (agent) => {
+            const source = (await access.read?.(agent.path)) ?? ""
+            const next = retargetInstructionPath(source, item, target.path)
+            if (next) await access.write?.(agent.path, next)
+          }),
+        )
+        if (item.configPath) {
+          const root = item.scope === "project" ? project() : config()
+          const nextPath = instructionConfigPath(root, target.path)
+          await updateInstructions(item.scope, (current) =>
+            current.map((value) => (value === item.configPath ? nextPath : value)),
+          )
+        }
+        notifyAvaLibraryMove(item.path, target.path)
+      } else {
+        bumpAvaAgentsLibrary()
+      }
+    } else {
+      bumpAvaAgentsLibrary()
+    }
+    const id = documentId(item.kind, item.scope, target.path)
+    await refetch()
+    setStore("selected", id)
+    await loadSelected((docs.latest ?? []).find((entry) => entry.id === id))
+    if (item.kind === "instruction") await refetchInstructions()
+  }
+
   const updateInstructions = async (scope: AgentsScope, next: (current: string[]) => string[]) => {
     if (scope === "project") {
       const current = [...(sync().data.config.instructions ?? [])]
@@ -240,6 +337,7 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
       return
     }
     if (store.dirty) return
+    if (store.rename) return
     await loadSelected(item)
   }
   const scheduleLibraryReload = () => {
@@ -251,8 +349,11 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
     on(
       () => `${project()}\0${config()}`,
       () => {
-        void extractAgentPromptFiles({ access, project: project(), config: config() }).then(async (changed) => {
-          if (!changed) return
+        void Promise.all([
+          extractAgentPromptFiles({ access, project: project(), config: config() }),
+          stampInstructionIds({ access, project: project(), config: config() }),
+        ]).then(async ([extracted, stamped]) => {
+          if (!extracted && !stamped) return
           await refetch()
           await refetchInstructions()
           const id = store.selected
@@ -260,6 +361,23 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
           await loadSelected((docs.latest ?? []).find((item) => item.id === id))
         })
       },
+    ),
+  )
+
+  createEffect(
+    on(
+      () => `${live.movedFrom ?? ""}\0${live.movedTo ?? ""}`,
+      () => {
+        const from = live.movedFrom
+        const to = live.movedTo
+        if (!from || !to) return
+        setStore(
+          "settings",
+          "instructionPaths",
+          store.settings.instructionPaths.map((path) => retargetStoredPath(path, from, to)),
+        )
+      },
+      { defer: true },
     ),
   )
 
@@ -359,6 +477,14 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
             ? { width: `${props.sidebarWidth()}px`, "max-width": `${props.sidebarWidth()}px` }
             : undefined
         }
+        onKeyDown={(event) => {
+          if (event.key !== "F2" || !props.active) return
+          if (event.target instanceof HTMLInputElement && event.target.type === "search") return
+          const item = selected()
+          if (!item || store.rename) return
+          event.preventDefault()
+          beginRename(item)
+        }}
       >
         <div class="ava-manage-agents-search">
           <TextInputV2
@@ -394,18 +520,27 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
             title={language.t("ava.agents.scope.global")}
             items={grouped("global")}
             selected={store.selected}
+            rename={store.rename}
             draft={store.draft?.scope === "global" ? store.draft.value : undefined}
             label={stickyName}
             newLabel={props.pane === "agents" ? language.t("ava.agents.new.agent") : language.t("ava.agents.new.instruction")}
             deleteLabel={language.t("ava.agents.delete")}
+            renameLabel={language.t("common.rename")}
             placeholder={language.t("ava.agents.name.placeholder")}
             onSelect={(id) => {
               void persist()
               setStore("selected", id)
             }}
             onDelete={askRemove}
+            onRename={beginRename}
+            onRenameDraft={(value) => setStore("rename", "value", value)}
+            onRenameCommit={(item, value) => void commitRename(item, value)}
+            onRenameCancel={() => setStore("rename", undefined)}
             onContextMenu={(item, event) => {
-              if (!canReveal()) return
+              event.preventDefault()
+              void persist()
+              setStore("selected", item.id)
+              if (!canReveal() && !canRename()) return
               menu.show(item.path, event)
             }}
             onStartCreate={() => setStore("draft", { scope: "global", value: "" })}
@@ -417,18 +552,27 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
             title={language.t("ava.agents.scope.project")}
             items={grouped("project")}
             selected={store.selected}
+            rename={store.rename}
             draft={store.draft?.scope === "project" ? store.draft.value : undefined}
             label={stickyName}
             newLabel={props.pane === "agents" ? language.t("ava.agents.new.agent") : language.t("ava.agents.new.instruction")}
             deleteLabel={language.t("ava.agents.delete")}
+            renameLabel={language.t("common.rename")}
             placeholder={language.t("ava.agents.name.placeholder")}
             onSelect={(id) => {
               void persist()
               setStore("selected", id)
             }}
             onDelete={askRemove}
+            onRename={beginRename}
+            onRenameDraft={(value) => setStore("rename", "value", value)}
+            onRenameCommit={(item, value) => void commitRename(item, value)}
+            onRenameCancel={() => setStore("rename", undefined)}
             onContextMenu={(item, event) => {
-              if (!canReveal()) return
+              event.preventDefault()
+              void persist()
+              setStore("selected", item.id)
+              if (!canReveal() && !canRename()) return
               menu.show(item.path, event)
             }}
             onStartCreate={() => setStore("draft", { scope: "project", value: "" })}
@@ -505,10 +649,22 @@ export function AvaManageAgentsPage(props: { pane: AgentsPane; active?: boolean;
         x={menu.point().x}
         y={menu.point().y}
         onClose={menu.close}
-        onReveal={() => {
-          const path = menu.path()
-          if (path) void platform.revealPath?.(path)
-        }}
+        onRename={
+          canRename()
+            ? () => {
+                const item = selected()
+                if (item) requestAnimationFrame(() => beginRename(item))
+              }
+            : undefined
+        }
+        onReveal={
+          canReveal()
+            ? () => {
+                const path = menu.path()
+                if (path) void platform.revealPath?.(path)
+              }
+            : undefined
+        }
       />
     </div>
   )
@@ -587,13 +743,19 @@ function ScopeGroup(props: {
   title: string
   items: AgentsDocument[]
   selected?: string
+  rename?: { id: string; value: string }
   draft?: string
   label: (item: AgentsDocument) => string
   newLabel: string
   deleteLabel: string
+  renameLabel: string
   placeholder: string
   onSelect: (id: string) => void
   onDelete: (item: AgentsDocument) => void
+  onRename: (item: AgentsDocument) => void
+  onRenameDraft: (value: string) => void
+  onRenameCommit: (item: AgentsDocument, value: string) => void
+  onRenameCancel: () => void
   onContextMenu: (item: AgentsDocument, event: MouseEvent) => void
   onStartCreate: () => void
   onDraft: (value: string) => void
@@ -618,10 +780,16 @@ function ScopeGroup(props: {
           <AgentListRow
             item={item}
             selected={props.selected}
+            renameValue={props.rename?.id === item.id ? props.rename.value : undefined}
             label={props.label(item)}
             deleteLabel={props.deleteLabel}
+            renameLabel={props.renameLabel}
             onSelect={() => props.onSelect(item.id)}
             onDelete={() => props.onDelete(item)}
+            onRename={() => props.onRename(item)}
+            onRenameDraft={props.onRenameDraft}
+            onRenameCommit={(value) => props.onRenameCommit(item, value)}
+            onRenameCancel={props.onRenameCancel}
             onContextMenu={(event) => props.onContextMenu(item, event)}
           />
         )}
@@ -659,26 +827,49 @@ function ScopeGroup(props: {
 function AgentListRow(props: {
   item: AgentsDocument
   selected?: string
+  renameValue?: string
   label: string
   deleteLabel: string
+  renameLabel: string
   onSelect: () => void
   onDelete: () => void
+  onRename: () => void
+  onRenameDraft: (value: string) => void
+  onRenameCommit: (value: string) => void
+  onRenameCancel: () => void
   onContextMenu: (event: MouseEvent) => void
 }) {
   const [nameEl, setNameEl] = createSignal<HTMLSpanElement>()
   const [truncated, setTruncated] = createSignal(false)
+  const renaming = () => props.renameValue !== undefined
+  let finished = false
+  const finishRename = (value: string) => {
+    if (finished) return
+    finished = true
+    props.onRenameCommit(value)
+  }
   return (
-    <TruncatedCursorTooltip text={props.label} disabled={!truncated()}>
+    <TruncatedCursorTooltip text={props.label} disabled={renaming() || !truncated()}>
       {(handlers) => (
         <div
           class="ava-manage-agents-row"
           data-active={props.selected === props.item.id}
+          tabIndex={0}
           ref={(element) => {
-            if (props.selected !== props.item.id) return
+            if (props.selected !== props.item.id || renaming()) return
             requestAnimationFrame(() => element.scrollIntoView({ block: "nearest" }))
           }}
-          onClick={props.onSelect}
+          onClick={(event) => {
+            event.currentTarget.focus()
+            props.onSelect()
+          }}
           onContextMenu={props.onContextMenu}
+          onKeyDown={(event) => {
+            if (event.key !== "F2" || renaming()) return
+            event.preventDefault()
+            event.stopPropagation()
+            props.onRename()
+          }}
           onMouseEnter={(event) => {
             setTruncated(isTextTruncated(nameEl()))
             handlers.onMouseEnter(event)
@@ -686,10 +877,50 @@ function AgentListRow(props: {
           onMouseLeave={handlers.onMouseLeave}
           onMouseMove={handlers.onMouseMove}
         >
-          <span ref={setNameEl} class="ava-manage-agents-row-label">
-            {props.label}
-          </span>
-          <Show when={!props.item.sticky}>
+          <Show
+            when={renaming()}
+            fallback={
+              <span ref={setNameEl} class="ava-manage-agents-row-label">
+                {props.label}
+              </span>
+            }
+          >
+            <input
+              class="ava-manage-agents-row-rename"
+              value={props.renameValue}
+              aria-label={props.renameLabel}
+              ref={(element) =>
+                requestAnimationFrame(() => {
+                  element.focus()
+                  element.select()
+                })
+              }
+              onClick={(event) => event.stopPropagation()}
+              onInput={(event) => props.onRenameDraft(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "F2") {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  event.currentTarget.select()
+                  return
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  finishRename(props.renameValue ?? "")
+                  return
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  finished = true
+                  props.onRenameCancel()
+                }
+              }}
+              onBlur={() => finishRename(props.renameValue ?? "")}
+            />
+          </Show>
+          <Show when={!props.item.sticky && !renaming()}>
             <IconButtonV2
               type="button"
               size="small"

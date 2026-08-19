@@ -62,6 +62,9 @@ type PlatformBase = {
   /** Delete a file (desktop only) */
   browseDeletePath?(path: string): Promise<void>
 
+  /** Rename or move a file (desktop only) */
+  browseRenamePath?(from: string, to: string): Promise<void>
+
   /** Restart the app  */
   restart(): Promise<void>
 

@@ -7,7 +7,8 @@ export function AvaFileContextMenu(props: {
   x: number
   y: number
   onClose: () => void
-  onReveal: () => void
+  onReveal?: () => void
+  onRename?: () => void
 }) {
   const language = useLanguage()
   return (
@@ -19,16 +20,30 @@ export function AvaFileContextMenu(props: {
             style={{ left: `${props.x}px`, top: `${props.y}px` }}
             onPointerDown={(event) => event.stopPropagation()}
           >
-            <button
-              type="button"
-              class="w-full text-start px-3 py-1.5 text-12-regular text-text-strong hover:bg-surface-base-hover"
-              onClick={() => {
-                props.onReveal()
-                props.onClose()
-              }}
-            >
-              {language.t("session.header.reveal.fileExplorer")}
-            </button>
+            <Show when={props.onRename}>
+              <button
+                type="button"
+                class="w-full text-start px-3 py-1.5 text-12-regular text-text-strong hover:bg-surface-base-hover"
+                onClick={() => {
+                  props.onRename?.()
+                  props.onClose()
+                }}
+              >
+                {language.t("common.rename")}
+              </button>
+            </Show>
+            <Show when={props.onReveal}>
+              <button
+                type="button"
+                class="w-full text-start px-3 py-1.5 text-12-regular text-text-strong hover:bg-surface-base-hover"
+                onClick={() => {
+                  props.onReveal?.()
+                  props.onClose()
+                }}
+              >
+                {language.t("session.header.reveal.fileExplorer")}
+              </button>
+            </Show>
           </div>
         </div>
       </Portal>

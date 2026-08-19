@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join } from "node:path"
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron"
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
@@ -272,6 +272,12 @@ export function registerIpcHandlers(deps: Deps) {
     )
     if (!exists) return
     await shell.trashItem(path)
+  })
+
+  ipcMain.handle("browse-rename-path", async (_event: IpcMainInvokeEvent, from: string, to: string) => {
+    if (from === to) return
+    await mkdir(dirname(to), { recursive: true })
+    await rename(from, to)
   })
 
   ipcMain.handle("read-clipboard-image", () => {

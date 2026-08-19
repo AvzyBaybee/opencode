@@ -22,6 +22,16 @@ The filename (without `.md`) is the agent name. Example: `.opencode/agents/revie
 
 These folders are a library. Files there are available to attach. They are not applied to every agent automatically.
 
+## How plugging works
+
+In the Agents tab, attach instructions from the library. Only those attached files are loaded when that agent runs.
+
+Each instruction file has a hidden stable id. The agent stores that id, not the filename. You can rename an instruction in the app (F2, or right-click Rename) or rename the file outside the app, and any agent that already has it plugged in will still get it.
+
+The Instructions editor hides the id. You only edit the prompt text and the heading that is used as the display name.
+
+Older agents that still list a file path keep working. Saving the agent in settings converts those path plugs to ids.
+
 ## Agent file
 
 An agent is markdown with YAML frontmatter. When instructions are attached, the body stays empty.
@@ -36,8 +46,8 @@ permission:
   edit: ask
   bash: deny
 instructions:
-  - .opencode/instructions/voice.md
-  - .opencode/instructions/review.md
+  - inst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  - inst_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 ---
 ```
 
@@ -48,7 +58,7 @@ Useful frontmatter fields:
 - `model`, `variant`, `temperature`, `top_p`, `steps`
 - `hidden`, `disable`, `color`
 - `permission` — `allow` / `ask` / `deny` per tool; `task` controls which helpers this agent may invoke
-- `instructions` — list of instruction file paths, in the order they should be applied
+- `instructions` — list of instruction ids (or file paths), in the order they should be applied
 - `options.reasoningEffort` — provider reasoning setting when needed
 
 Subagents use the same format. Set `mode: subagent` (or `all` if it should also be selectable as a primary agent).
@@ -57,16 +67,20 @@ Do not put the system prompt in the agent body. Put it in instruction files and 
 
 ## Instruction file
 
-An instruction is ordinary markdown. The first `#` heading is the display name.
+An instruction is markdown. The first `#` heading is the display name. A hidden `id` in the file frontmatter is the stable plug used by agents.
 
 ```markdown
+---
+id: inst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+---
+
 # Review
 
 Read the diff before commenting.
 Prefer the smallest change that fixes the issue.
 ```
 
-Paths in an agent's `instructions` list may be absolute or relative to the project directory. Missing files are skipped.
+An agent's `instructions` list may contain those ids, or file paths (absolute or relative to the project). Missing files are skipped.
 
 ## How a prompt is built
 
@@ -80,5 +94,5 @@ Opening Manage Agents migrates leftover agent bodies: the body is written to `.o
 
 - Do not write agent parameters and prompt text as one mixed document.
 - Do not copy an instruction's contents into the agent file; attach the instruction instead.
-- Do not assume every file in `instructions/` is loaded. Only paths listed on the agent are used.
+- Do not assume every file in `instructions/` is loaded. Only instructions listed on the agent are used.
 - Do not use `AGENTS.md` as an agent's prompt. `AGENTS.md` is separate ambient project text, not part of this plug-in list.

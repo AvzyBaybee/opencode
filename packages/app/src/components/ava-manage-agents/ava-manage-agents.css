@@ -106,6 +106,19 @@
   opacity: 1;
 }
 
+.ava-manage-agents-row-rename {
+  min-width: 0;
+  flex: 1;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  cursor: text;
+}
+
 .ava-manage-agents-create input {
   cursor: text;
   outline: none;

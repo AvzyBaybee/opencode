@@ -1017,6 +1017,7 @@ export const dict = {
   "ava.agents.name.placeholder": "Name",
   "ava.agents.saveFailed.title": "Could not save",
   "ava.agents.deleteFailed.title": "Could not delete",
+  "ava.agents.renameFailed.title": "Could not rename",
   "ava.agents.desktopOnly": "Saving agents needs the desktop app.",
   "ava.agents.search.agents": "Search Agents...",
   "ava.agents.search.instructions": "Search Instructions...",

@@ -97,6 +97,7 @@ export type ElectronAPI = {
   browseReadTextFile: (path: string) => Promise<string | null>
   browseWriteTextFile: (path: string, content: string) => Promise<void>
   browseDeletePath: (path: string) => Promise<void>
+  browseRenamePath: (from: string, to: string) => Promise<void>
   readClipboardImage: () => Promise<{ buffer: ArrayBuffer; width: number; height: number } | null>
   getWindowFocused: () => Promise<boolean>
   getWindowFullscreen: () => Promise<boolean>

@@ -105,6 +105,7 @@ const api: ElectronAPI = {
   browseReadTextFile: (path) => ipcRenderer.invoke("browse-read-text-file", path),
   browseWriteTextFile: (path, content) => ipcRenderer.invoke("browse-write-text-file", path, content),
   browseDeletePath: (path) => ipcRenderer.invoke("browse-delete-path", path),
+  browseRenamePath: (from, to) => ipcRenderer.invoke("browse-rename-path", from, to),
   readClipboardImage: () => ipcRenderer.invoke("read-clipboard-image"),
   getWindowFocused: () => ipcRenderer.invoke("get-window-focused"),
   getWindowFullscreen: () => ipcRenderer.invoke("get-window-fullscreen"),

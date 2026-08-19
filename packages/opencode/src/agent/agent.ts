@@ -316,6 +316,7 @@ const layer = Layer.effect(
               prompt: item.prompt,
               options: item.options,
               directory: ctx.directory,
+              config: Global.Path.config,
             })
             if (prompt === item.prompt) return item
             return { ...item, prompt }

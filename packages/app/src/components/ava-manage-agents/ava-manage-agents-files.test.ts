@@ -7,8 +7,14 @@ import {
   instructionFolderGlob,
   isAgentsLibraryFile,
   isAgentsMdPath,
+  libraryRenameTarget,
   loadInstructions,
   matchesInstructionPath,
+  renamedLibraryContent,
+  replaceHeadingName,
+  retargetInstructionPath,
+  retargetStoredPath,
+  siblingPath,
   withInstructionGlob,
 } from "./ava-manage-agents-files"
 
@@ -66,6 +72,77 @@ describe("ava manage agents files", () => {
     ).toBe(true)
   })
 
+  test("matches an attached instruction by stable id", () => {
+    expect(
+      matchesInstructionPath(
+        {
+          id: "instruction:project:/p/.opencode/instructions/voice.md",
+          kind: "instruction",
+          scope: "project",
+          slug: "voice",
+          name: "Voice",
+          path: "/p/.opencode/instructions/renamed.md",
+          instructionId: "inst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
+        "inst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      ),
+    ).toBe(true)
+  })
+
+  test("plans a renamed library file and updates headings and instruction paths", () => {
+    expect(siblingPath("/p/.opencode/agents/old.md", "cool-agent.md")).toBe("/p/.opencode/agents/cool-agent.md")
+    expect(replaceHeadingName("# Old\n\nBody\n", "New")).toBe("# New\n\nBody\n")
+    expect(
+      libraryRenameTarget(
+        {
+          id: "instruction:project:/p/.opencode/instructions/old.md",
+          kind: "instruction",
+          scope: "project",
+          slug: "old",
+          name: "Old",
+          path: "/p/.opencode/instructions/old.md",
+        },
+        "New Voice",
+        new Set(["old", "new-voice"]),
+      )?.path,
+    ).toBe("/p/.opencode/instructions/new-voice-2.md")
+    expect(
+      renamedLibraryContent(
+        {
+          id: "instruction:project:/p/.opencode/instructions/old.md",
+          kind: "instruction",
+          scope: "project",
+          slug: "old",
+          name: "Old",
+          path: "/p/.opencode/instructions/old.md",
+        },
+        "# Old\n\nKeep this.\n",
+        "New Voice",
+      ),
+    ).toBe("# New Voice\n\nKeep this.\n")
+    expect(retargetStoredPath("/p/.opencode/instructions/old.md", "/p/.opencode/instructions/old.md", "/p/.opencode/instructions/new.md")).toBe(
+      "/p/.opencode/instructions/new.md",
+    )
+    const next = retargetInstructionPath(
+      `---
+instructions:
+  - /p/.opencode/instructions/old.md
+---
+`,
+      {
+        id: "instruction:project:/p/.opencode/instructions/old.md",
+        kind: "instruction",
+        scope: "project",
+        slug: "old",
+        name: "Old",
+        path: "/p/.opencode/instructions/old.md",
+      },
+      "/p/.opencode/instructions/new.md",
+    )
+    expect(next).toContain("/p/.opencode/instructions/new.md")
+    expect(next).not.toContain("/p/.opencode/instructions/old.md")
+  })
+
   test("recognizes project and global agent library files", () => {
     expect(isAgentsLibraryFile(".opencode/instructions/voice.md", "/p", "/c")).toBe(true)
     expect(isAgentsLibraryFile("/p/.opencode/agents/builder.md", "/p", "/c")).toBe(true)
@@ -103,8 +180,10 @@ Build things with care.
     const instruction = files.get("/p/.opencode/instructions/builder-instructions.md")
     expect(instruction).toContain("# Builder Instructions")
     expect(instruction).toContain("Build things with care.")
+    expect(instruction).toMatch(/id: inst_[0-9a-f]{32}/)
     const agent = files.get("/p/.opencode/agents/builder.md") ?? ""
-    expect(agent).toContain("/p/.opencode/instructions/builder-instructions.md")
+    expect(agent).toMatch(/inst_[0-9a-f]{32}/)
+    expect(agent).not.toContain("/p/.opencode/instructions/builder-instructions.md")
     expect(agent).toContain('color: "#4C6FFF"')
     expect(agent).not.toContain("Build things with care.")
     expect(await extractAgentPromptFiles({ access, project: "/p", config: "/c" })).toBe(false)

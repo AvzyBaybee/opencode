@@ -1,10 +1,17 @@
 import type { BrowseDirectoryEntry } from "@/context/platform"
 import {
+  createInstructionId,
   displayNameFromSlug,
   documentId,
   headingName,
+  isInstructionId,
   joinPath,
+  parseInstructionFile,
+  slugifyName,
+  uniqueSlug,
+  withInstructionId,
   type AgentDocument,
+  type AgentsDocument,
   type AgentsScope,
   type InstructionDocument,
 } from "./ava-manage-agents-model"
@@ -15,6 +22,7 @@ export type AgentsFileAccess = {
   read?: (path: string) => Promise<string | null>
   write?: (path: string, content: string) => Promise<void>
   remove?: (path: string) => Promise<void>
+  rename?: (from: string, to: string) => Promise<void>
 }
 
 const markdown = (entry: BrowseDirectoryEntry) => entry.type === "file" && entry.name.toLowerCase().endsWith(".md")
@@ -62,11 +70,33 @@ export async function loadInstructions(input: {
   return Promise.all(
     extras.map(async (item) => {
       const raw = (await input.access.read?.(item.path)) ?? ""
+      const parsed = parseInstructionFile(raw)
       const heading = headingName(raw)
-      if (!heading) return item
-      return { ...item, name: heading }
+      return {
+        ...item,
+        name: heading ?? item.name,
+        instructionId: parsed.id,
+      }
     }),
   )
+}
+
+export async function stampInstructionIds(input: {
+  access: AgentsFileAccess
+  project: string
+  config: string
+}) {
+  if (!input.access.write || !input.access.read) return false
+  const docs = await loadInstructions(input)
+  const results = await Promise.all(
+    docs.map(async (item) => {
+      if (item.instructionId) return false
+      const raw = (await input.access.read?.(item.path)) ?? ""
+      await input.access.write?.(item.path, withInstructionId(raw, createInstructionId()))
+      return true
+    }),
+  )
+  return results.some(Boolean)
 }
 
 export function instructionFolderGlob(scope: AgentsScope, root: string) {
@@ -87,7 +117,7 @@ export function exclusiveInstructionPaths(paths: string[]) {
   const seen = new Set<string>()
   return paths.filter((path) => {
     if (isAgentsMdPath(path)) return false
-    const key = normalizePath(path)
+    const key = isInstructionId(path) ? path.trim().toLowerCase() : normalizePath(path)
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -124,9 +154,10 @@ async function extractOneAgent(
   const dest = joinPath(folder, `${agent.slug}-instructions.md`)
   const existing = await input.access.read?.(dest)
   if (existing !== null && existing !== undefined) return false
-  const content = `# ${extractedInstructionHeading(agent.name)}\n\n${body}\n`
+  const instructionId = createInstructionId()
+  const content = withInstructionId(`# ${extractedInstructionHeading(agent.name)}\n\n${body}\n`, instructionId)
   await input.access.write?.(dest, content)
-  parsed.settings.instructionPaths = exclusiveInstructionPaths([...parsed.settings.instructionPaths, dest])
+  parsed.settings.instructionPaths = exclusiveInstructionPaths([...parsed.settings.instructionPaths, instructionId])
   await input.access.write?.(agent.path, serializeAgentSettings(parsed.settings, ""))
   return true
 }
@@ -164,9 +195,21 @@ function toInstruction(scope: AgentsScope, entry: BrowseDirectoryEntry, configPa
 }
 
 export function matchesInstructionPath(item: InstructionDocument, path: string) {
+  if (item.instructionId && isInstructionId(path) && item.instructionId === path.trim().toLowerCase()) return true
   if (samePath(item.path, path)) return true
   if (item.configPath && samePath(item.configPath, path)) return true
   return normalizePath(fileName(item.path)) === normalizePath(fileName(path))
+}
+
+export function instructionRef(item: InstructionDocument) {
+  return item.instructionId ?? item.path
+}
+
+export function preferInstructionIds(refs: string[], docs: InstructionDocument[]) {
+  return exclusiveInstructionPaths(refs).map((ref) => {
+    const item = docs.find((doc) => matchesInstructionPath(doc, ref))
+    return item ? instructionRef(item) : ref
+  })
 }
 
 export function isAgentsLibraryFile(path: string, project: string, config: string) {
@@ -188,6 +231,59 @@ function libraryRoots(config: string) {
 
 export function instructionDisplayName(path: string) {
   return displayNameFromSlug(fileName(path).replace(/\.md$/i, ""))
+}
+
+export function siblingPath(path: string, name: string) {
+  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/)
+  parts[parts.length - 1] = name
+  const slash = path.includes("\\") && !path.includes("/") ? "\\" : "/"
+  return parts.join(slash)
+}
+
+export function replaceHeadingName(raw: string, name: string) {
+  const heading = `# ${name}`
+  if (/^# /m.test(raw)) return raw.replace(/^# .*$/m, heading)
+  if (!raw.trim()) return `${heading}\n\n`
+  return `${heading}\n\n${raw}`
+}
+
+export function libraryRenameTarget(item: AgentsDocument, name: string, taken: Set<string>) {
+  const value = name.trim()
+  if (!value) return
+  const used = new Set(taken)
+  used.delete(item.slug)
+  const slug = uniqueSlug(slugifyName(value), used)
+  return {
+    name: value,
+    slug,
+    path: siblingPath(item.path, `${slug}.md`),
+  }
+}
+
+export function renamedLibraryContent(item: AgentsDocument, raw: string, name: string) {
+  if (item.kind === "instruction") return replaceHeadingName(raw, name)
+  const parsed = parseAgentSettings(raw)
+  if (!parsed.settings.description || parsed.settings.description === item.name) parsed.settings.description = name
+  return serializeAgentSettings(parsed.settings, parsed.body)
+}
+
+export function retargetStoredPath(path: string, from: string, to: string) {
+  if (samePath(path, from)) return to
+  if (samePath(fileName(path), fileName(from))) return to
+  return path
+}
+
+export function retargetInstructionPath(raw: string, item: InstructionDocument, to: string) {
+  const parsed = parseAgentSettings(raw)
+  let changed = false
+  parsed.settings.instructionPaths = parsed.settings.instructionPaths.map((path) => {
+    if (item.instructionId && isInstructionId(path) && item.instructionId === path.trim().toLowerCase()) return path
+    if (!matchesInstructionPath(item, path)) return path
+    changed = true
+    return item.instructionId ?? to
+  })
+  if (!changed) return
+  return serializeAgentSettings(parsed.settings, parsed.body)
 }
 
 function fileName(path: string) {

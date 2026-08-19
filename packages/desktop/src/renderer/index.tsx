@@ -236,6 +236,9 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     async browseDeletePath(path: string) {
       return window.api.browseDeletePath(path)
     },
+    async browseRenamePath(from: string, to: string) {
+      return window.api.browseRenamePath(from, to)
+    },
 
     storage,
     draftStore: createDraftStore({
